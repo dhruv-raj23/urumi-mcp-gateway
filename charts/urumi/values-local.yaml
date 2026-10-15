@@ -1,0 +1,8 @@
+# Local k3d. *.localhost resolves to 127.0.0.1 in modern browsers/curl; k3d maps host :80 -> Traefik.
+global:
+  domain: localhost
+  storageClass: ""        # k3d default 'local-path'
+ingress:
+  className: traefik
+gateway:
+  cookieSecure: false

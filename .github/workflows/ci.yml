@@ -1,0 +1,13 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: azure/setup-helm@v4
+      - run: pip install pyyaml
+      - run: for a in gateway woo-mcp mcp-time mcp-notes dashboard; do (cd apps/$a && npm install --no-audit --no-fund); done
+      - run: make check

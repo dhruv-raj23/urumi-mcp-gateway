@@ -1,0 +1,11 @@
+# Production-like VPS (k3s). Only non-secret deployment differences live here.
+global:
+  domain: CHANGE_ME_DOMAIN        # e.g. example.com -> store.example.com, app.example.com
+  imageRegistry: CHANGE_ME_REGISTRY  # e.g. ghcr.io/<user>
+  storageClass: local-path        # k3s default; change for cloud (e.g. gp3, standard-rwo)
+ingress:
+  className: traefik
+  tls: { enabled: true, clusterIssuer: letsencrypt-prod }
+gateway:
+  cookieSecure: true
+  replicas: 1

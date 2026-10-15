@@ -1,0 +1,67 @@
+# Defaults shared by local and prod. NO secret values here (ADR-0007).
+global:
+  domain: localhost            # hosts become store.<domain>, app.<domain>
+  imageRegistry: ""            # prod: e.g. ghcr.io/<user>
+  storageClass: ""             # empty = cluster default
+
+ingress:
+  className: traefik
+  tls:
+    enabled: false
+    clusterIssuer: ""
+
+mongo:
+  image: { repository: mongo, tag: "7", pullPolicy: IfNotPresent }
+  existingSecret: urumi-mongo
+  persistence: { enabled: true, size: 2Gi, storageClass: "" }
+  resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+
+mariadb:
+  image: { repository: mariadb, tag: "11", pullPolicy: IfNotPresent }
+  existingSecret: urumi-mariadb
+  persistence: { enabled: true, size: 2Gi, storageClass: "" }
+  resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+
+wordpress:
+  image: { repository: wordpress, tag: "6-apache", pullPolicy: IfNotPresent }
+  existingSecret: urumi-wordpress
+  wooApiSecret: urumi-woo-api
+  adminUser: admin
+  adminEmail: admin@example.com
+  persistence: { enabled: true, size: 5Gi, storageClass: "" }
+  resources: { requests: { cpu: 200m, memory: 256Mi }, limits: { cpu: 1000m, memory: 768Mi } }
+
+wooMcp:
+  image: { repository: urumi/woo-mcp, tag: dev, pullPolicy: IfNotPresent }
+  replicas: 1
+  existingSecret: urumi-woo-mcp
+  wooApiSecret: urumi-woo-api
+  resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 192Mi } }
+
+mcpTime:
+  image: { repository: urumi/mcp-time, tag: dev, pullPolicy: IfNotPresent }
+  replicas: 1
+  resources: { requests: { cpu: 25m, memory: 48Mi }, limits: { cpu: 150m, memory: 128Mi } }
+
+mcpNotes:
+  image: { repository: urumi/mcp-notes, tag: dev, pullPolicy: IfNotPresent }
+  replicas: 1
+  resources: { requests: { cpu: 25m, memory: 48Mi }, limits: { cpu: 150m, memory: 128Mi } }
+
+gateway:
+  image: { repository: urumi/gateway, tag: dev, pullPolicy: IfNotPresent }
+  replicas: 1
+  existingSecret: urumi-gateway
+  mongoSecret: urumi-mongo
+  cookieSecure: false
+  llm: { provider: openai-compatible, baseUrl: "", model: "" }   # key is in Secret urumi-gateway
+  timeouts: { listMs: 5000, callMs: 30000, healthIntervalMs: 15000 }
+  resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 384Mi } }
+
+dashboard:
+  image: { repository: urumi/dashboard, tag: dev, pullPolicy: IfNotPresent }
+  replicas: 1
+  resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 150m, memory: 96Mi } }
+
+networkPolicy:
+  enabled: false   # turned on in T08

@@ -1,0 +1,2 @@
+urumi installed. Store: http://store.{{ .Values.global.domain }}  Dashboard: http://app.{{ .Values.global.domain }}
+(Templates for components are added task by task: see docs/tasks/.)
