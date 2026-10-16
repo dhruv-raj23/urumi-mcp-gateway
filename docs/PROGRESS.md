@@ -1,7 +1,7 @@
 # PROGRESS (agents: tick ONLY with passing acceptance evidence)
 Deadline 26 Oct 2026. Order matters; do not start a task before its dependencies.
 
-- [ ] T00 Repo + local cluster + secrets script      (15 Oct)
+- [x] T00 Repo + local cluster + secrets script      (15 Oct)
 - [ ] T01 WordPress + WooCommerce + MariaDB chart     (15–16 Oct)
 - [ ] T02 woo-mcp server                              (17–18 Oct)
 - [ ] T03 Gateway: data, auth, keys, servers CRUD, audit (19–20 Oct)
