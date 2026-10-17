@@ -1,0 +1,314 @@
+{{- $wordpressImage := printf "%s:%s" .Values.wordpress.image.repository .Values.wordpress.image.tag -}}
+{{- $cliImage := printf "%s:%s" .Values.wordpress.cliImage.repository .Values.wordpress.cliImage.tag -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wordpress-bootstrap-scripts
+data:
+  seed-woo-api-key.php: |
+    <?php
+    global $wpdb;
+
+    $consumerKey = (string) getenv("WC_CONSUMER_KEY");
+    $consumerSecret = (string) getenv("WC_CONSUMER_SECRET");
+    $adminLogin = (string) getenv("WORDPRESS_ADMIN_USER");
+
+    if ($consumerKey === "" || $consumerSecret === "" || $adminLogin === "") {
+        fwrite(STDERR, "WooCommerce API bootstrap configuration is incomplete.\n");
+        exit(1);
+    }
+
+    if (!function_exists("wc_api_hash")) {
+        fwrite(STDERR, "WooCommerce API hashing function is unavailable.\n");
+        exit(1);
+    }
+
+    $user = get_user_by("login", $adminLogin);
+    if (!$user) {
+        fwrite(STDERR, "WordPress bootstrap administrator was not found.\n");
+        exit(1);
+    }
+
+    $table = $wpdb->prefix . "woocommerce_api_keys";
+    $hashedKey = wc_api_hash($consumerKey);
+
+    $existingId = $wpdb->get_var(
+        $wpdb->prepare(
+            "SELECT key_id FROM {$table} WHERE consumer_key = %s LIMIT 1",
+            $hashedKey
+        )
+    );
+
+    $record = array(
+        "user_id" => (int) $user->ID,
+        "description" => "Urumi WooCommerce MCP",
+        "permissions" => "read_write",
+        "consumer_key" => $hashedKey,
+        "consumer_secret" => $consumerSecret,
+        "truncated_key" => substr($consumerKey, -7),
+    );
+
+    $formats = array("%d", "%s", "%s", "%s", "%s", "%s");
+
+    if ($existingId !== null) {
+        $result = $wpdb->update(
+            $table,
+            $record,
+            array("key_id" => (int) $existingId),
+            $formats,
+            array("%d")
+        );
+    } else {
+        $result = $wpdb->insert($table, $record, $formats);
+    }
+
+    if ($result === false) {
+        fwrite(STDERR, "WooCommerce API key write failed; database error redacted.\n");
+        exit(1);
+    }
+
+    echo "WooCommerce REST API key reconciled.\n";
+  set-admin-password.php: |
+    <?php
+    $adminLogin = (string) getenv("WORDPRESS_ADMIN_USER");
+    $password = (string) getenv("WORDPRESS_ADMIN_PASSWORD");
+
+    if ($adminLogin === "" || $password === "") {
+        fwrite(STDERR, "Administrator bootstrap configuration is incomplete.\n");
+        exit(1);
+    }
+
+    $user = get_user_by("login", $adminLogin);
+    if (!$user) {
+        fwrite(STDERR, "Bootstrap administrator was not found.\n");
+        exit(1);
+    }
+
+    wp_set_password($password, (int) $user->ID);
+    echo "Bootstrap administrator password configured.\n";
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wordpress-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: 900
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wordpress-bootstrap
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        fsGroup: 33
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare-wordpress-files
+          image: {{ $wordpressImage | quote }}
+          imagePullPolicy: {{ .Values.wordpress.image.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              if [ ! -f /var/www/html/wp-includes/version.php ]; then
+                cp -Rn /usr/src/wordpress/. /var/www/html/
+              fi
+              test -s /var/www/html/wp-includes/version.php
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 33
+            runAsGroup: 33
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.wordpress.resources | nindent 12 }}
+          volumeMounts:
+            - name: wordpress-root
+              mountPath: /var/www/html
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
+      containers:
+        - name: wordpress-bootstrap
+          image: {{ $cliImage | quote }}
+          imagePullPolicy: {{ .Values.wordpress.cliImage.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              cd /var/www/html
+
+              if ! printf '%s\n' "$WORDPRESS_DB_PASSWORD" |
+                wp config create \
+                  --dbname="$WORDPRESS_DB_NAME" \
+                  --dbuser="$WORDPRESS_DB_USER" \
+                  --dbhost="$WORDPRESS_DB_HOST" \
+                  --prompt=dbpass \
+                  --skip-check >/dev/null 2>&1; then
+                echo "WordPress configuration creation failed; details suppressed." >&2
+                exit 1
+              fi
+
+              attempt=1
+              until wp db check >/dev/null 2>&1; do
+                if [ "$attempt" -ge 60 ]; then
+                  echo "Could not connect to MariaDB after 60 attempts." >&2
+                  exit 1
+                fi
+                echo "Waiting for MariaDB (attempt ${attempt}/60)..."
+                sleep 3
+                attempt=$((attempt + 1))
+              done
+              echo "MariaDB connection verified."
+
+              if ! wp core is-installed >/dev/null 2>&1; then
+                if ! printf '%s\n' "$WORDPRESS_ADMIN_PASSWORD" |
+                  wp core install \
+                    --url="$WORDPRESS_SITE_URL" \
+                    --title="$WORDPRESS_SITE_TITLE" \
+                    --admin_user="$WORDPRESS_ADMIN_USER" \
+                    --admin_email="$WORDPRESS_ADMIN_EMAIL" \
+                    --skip-email \
+                    --prompt=admin_password >/dev/null 2>&1; then
+                  echo "WordPress installation failed; details suppressed." >&2
+                  exit 1
+                fi
+              else
+                echo "WordPress is already installed."
+              fi
+
+              # Upgrade the database schema if the WordPress image changed.
+              wp core update-db
+
+              # Set the bootstrap administrator password only once. This also
+              # handles a site installed by a previous, partially failed Job.
+              adminPasswordVersion="$(wp option get urumi_admin_password_bootstrap_version 2>/dev/null || true)"
+              if [ "$adminPasswordVersion" != "1" ]; then
+                if ! wp eval-file /init-scripts/set-admin-password.php >/dev/null 2>&1; then
+                  echo "Administrator password configuration failed; details suppressed." >&2
+                  exit 1
+                fi
+                wp option update urumi_admin_password_bootstrap_version 1 --autoload=no
+                echo "Initial administrator password configured."
+              fi
+
+              if ! wp plugin is-installed woocommerce; then
+                wp plugin install woocommerce
+              fi
+
+              if ! wp plugin is-active woocommerce; then
+                wp plugin activate woocommerce
+              fi
+
+              # Apply initial defaults only once so later upgrades do not
+              # overwrite store settings changed by the administrator.
+              bootstrapVersion="$(wp option get urumi_store_bootstrap_version 2>/dev/null || true)"
+              if [ "$bootstrapVersion" != "1" ]; then
+                wp option update woocommerce_currency "$WORDPRESS_CURRENCY"
+                wp rewrite structure '/%postname%/' --hard
+                wp rewrite flush
+
+                wp eval '
+                  $settings = (array) get_option("woocommerce_cod_settings", array());
+                  $settings["enabled"] = "yes";
+                  $settings["title"] = "Cash on delivery";
+                  $settings["description"] = "Pay with cash upon delivery.";
+                  $settings["instructions"] = "Pay the courier when your order arrives.";
+                  update_option("woocommerce_cod_settings", $settings);
+                '
+
+                wp option update urumi_store_bootstrap_version 1 --autoload=no
+                echo "Initial store defaults configured."
+              else
+                echo "Store defaults already initialized; preserving current settings."
+              fi
+
+              wp eval-file /init-scripts/seed-woo-api-key.php
+              echo "WordPress and WooCommerce bootstrap completed."
+          env:
+            - name: HOME
+              value: /tmp
+            - name: WP_CLI_CACHE_DIR
+              value: /tmp/wp-cli/cache
+            - name: WORDPRESS_DB_HOST
+              value: "mariadb:3306"
+            - name: WORDPRESS_DB_NAME
+              value: {{ .Values.mariadb.databaseName | quote }}
+            - name: WORDPRESS_DB_USER
+              value: {{ .Values.mariadb.user | quote }}
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mariadb.existingSecret }}
+                  key: MARIADB_PASSWORD
+            - name: WORDPRESS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.wordpress.existingSecret }}
+                  key: WORDPRESS_ADMIN_PASSWORD
+            - name: WORDPRESS_ADMIN_USER
+              value: {{ .Values.wordpress.adminUser | quote }}
+            - name: WORDPRESS_ADMIN_EMAIL
+              value: {{ .Values.wordpress.adminEmail | quote }}
+            - name: WORDPRESS_SITE_TITLE
+              value: {{ .Values.wordpress.siteTitle | quote }}
+            - name: WORDPRESS_CURRENCY
+              value: {{ .Values.wordpress.currency | quote }}
+            - name: WORDPRESS_SITE_URL
+              value: {{ printf "%s://store.%s" (ternary "https" "http" .Values.ingress.tls.enabled) .Values.global.domain | quote }}
+            - name: WC_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.wordpress.wooApiSecret }}
+                  key: WC_CONSUMER_KEY
+            - name: WC_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.wordpress.wooApiSecret }}
+                  key: WC_CONSUMER_SECRET
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 33
+            runAsGroup: 33
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.wordpress.resources | nindent 12 }}
+          volumeMounts:
+            - name: wordpress-root
+              mountPath: /var/www/html
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
+            - name: tmp
+              mountPath: /tmp
+            - name: bootstrap-scripts
+              mountPath: /init-scripts
+              readOnly: true
+      volumes:
+        - name: wordpress-root
+          emptyDir: {}
+        - name: wp-content
+          {{- if .Values.wordpress.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: wordpress-content
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+        - name: bootstrap-scripts
+          configMap:
+            name: wordpress-bootstrap-scripts
+            defaultMode: 0444

@@ -115,6 +115,7 @@ Errors: `{ "error": { "code": "...", "message": "..." } }` with correct HTTP sta
 - woo-mcp talks to WordPress via **WooCommerce REST API v3** (`/wp-json/wc/v3/...`) — see ADR-0003.
 - `update_order_status` accepts only: `pending`, `processing`, `on-hold`, `completed`, `cancelled`, `refunded`, `failed`.
 - `list_orders` supports `after`/`before` ISO dates (so "orders today" works), `status`, `per_page` (max 50).
+- Store defaults: WordPress database/user are `wordpress`; store currency is `INR` (ADR-0008).
 
 ## 13. Helm values keys (top level of `charts/urumi/values.yaml`)
 `global`, `ingress`, `mongo`, `mariadb`, `wordpress`, `wooMcp`, `gateway`, `dashboard`, `mcpTime`, `mcpNotes`, `networkPolicy`.

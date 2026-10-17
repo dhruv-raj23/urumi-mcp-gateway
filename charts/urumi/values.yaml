@@ -19,13 +19,23 @@ mongo:
 mariadb:
   image: { repository: mariadb, tag: "11", pullPolicy: IfNotPresent }
   existingSecret: urumi-mariadb
+  databaseName: wordpress
+  user: wordpress
+  replicas: 1
   persistence: { enabled: true, size: 2Gi, storageClass: "" }
   resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
 
 wordpress:
-  image: { repository: wordpress, tag: "6-apache", pullPolicy: IfNotPresent }
+  siteTitle: "Urumi Store"
+  cliImage:
+    repository: wordpress
+    tag: "cli-php8.3"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  image: { repository: wordpress, tag: "7-apache", pullPolicy: IfNotPresent }
   existingSecret: urumi-wordpress
   wooApiSecret: urumi-woo-api
+  currency: INR
   adminUser: admin
   adminEmail: admin@example.com
   persistence: { enabled: true, size: 5Gi, storageClass: "" }

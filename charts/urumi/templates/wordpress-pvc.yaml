@@ -1,0 +1,20 @@
+{{- if .Values.wordpress.persistence.enabled }}
+{{- $storageClass := .Values.wordpress.persistence.storageClass | default .Values.global.storageClass }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-content
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.wordpress.persistence.size }}
+  {{- if $storageClass }}
+  storageClassName: {{ $storageClass | quote }}
+  {{- end }}
+{{- end }}

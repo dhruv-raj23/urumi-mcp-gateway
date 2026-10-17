@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wordpress-apache
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  ports.conf: |
+    Listen 8080
+  000-default.conf: |
+    <VirtualHost *:8080>
+        ServerName localhost
+        ServerAdmin webmaster@localhost
+        DocumentRoot /var/www/html
+
+        <Directory /var/www/html>
+            Options FollowSymLinks
+            AllowOverride All
+            Require all granted
+        </Directory>
+
+        ErrorLog /dev/stderr
+        CustomLog /dev/stdout combined
+    </VirtualHost>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.wordpress.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.labels" . | nindent 8 }}
+        app.kubernetes.io/name: wordpress
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 33
+        runAsGroup: 33
+        fsGroup: 33
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: prepare-wordpress-files
+          image: "{{ .Values.wordpress.image.repository }}:{{ .Values.wordpress.image.tag }}"
+          imagePullPolicy: {{ .Values.wordpress.image.pullPolicy }}
+          command:
+            - sh
+            - -ec
+            - |
+              if [ ! -f /var/www/html/wp-includes/version.php ]; then
+                cp -Rn /usr/src/wordpress/. /var/www/html/
+              fi
+              test -s /var/www/html/wp-includes/version.php
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 33
+            runAsGroup: 33
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.wordpress.resources | nindent 12 }}
+          volumeMounts:
+            - name: wordpress-root
+              mountPath: /var/www/html
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
+      containers:
+        - name: wordpress
+          image: "{{ .Values.wordpress.image.repository }}:{{ .Values.wordpress.image.tag }}"
+          imagePullPolicy: {{ .Values.wordpress.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mariadb:3306
+            - name: WORDPRESS_DB_NAME
+              value: {{ .Values.mariadb.databaseName | quote }}
+            - name: WORDPRESS_DB_USER
+              value: {{ .Values.mariadb.user | quote }}
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mariadb.existingSecret }}
+                  key: MARIADB_PASSWORD
+            - name: APACHE_RUN_DIR
+              value: /tmp/apache2/run
+            - name: APACHE_PID_FILE
+              value: /tmp/apache2/run/apache2.pid
+            - name: APACHE_LOCK_DIR
+              value: /tmp/apache2/lock
+            - name: APACHE_LOG_DIR
+              value: /tmp/apache2/log
+            - name: WORDPRESS_CONFIG_EXTRA
+              value: |
+                if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0])) === 'https') {
+                    $_SERVER['HTTPS'] = 'on';
+                }
+          startupProbe:
+            httpGet:
+              path: /wp-login.php
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /wp-login.php
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /wp-login.php
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.wordpress.resources | nindent 12 }}
+          volumeMounts:
+            - name: wordpress-root
+              mountPath: /var/www/html
+            - name: wp-content
+              mountPath: /var/www/html/wp-content
+            - name: tmp
+              mountPath: /tmp
+            - name: php-sessions
+              mountPath: /var/lib/php/sessions
+            - name: apache-config
+              mountPath: /etc/apache2/ports.conf
+              subPath: ports.conf
+              readOnly: true
+            - name: apache-config
+              mountPath: /etc/apache2/sites-enabled/000-default.conf
+              subPath: 000-default.conf
+              readOnly: true
+      volumes:
+        - name: wordpress-root
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: php-sessions
+          emptyDir: {}
+        - name: apache-config
+          configMap:
+            name: wordpress-apache
+        {{- if .Values.wordpress.persistence.enabled }}
+        - name: wp-content
+          persistentVolumeClaim:
+            claimName: wordpress-content
+        {{- else }}
+        - name: wp-content
+          emptyDir: {}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: wordpress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  {{ if .Values.ingress.tls.enabled }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer | quote }}
+  {{ end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  rules:
+    - host: store.{{ .Values.global.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wordpress
+                port:
+                  number: 80
+  {{ if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - store.{{ .Values.global.domain }}
+      secretName: urumi-store-tls
+  {{ end }}
