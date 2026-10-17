@@ -17,6 +17,7 @@ If two sources conflict, follow the higher one and note it in `docs/OPEN_QUESTIO
 ## 2. Session protocol
 1. Read `docs/PROGRESS.md`. Pick the **first unchecked task** unless the owner names another.
 2. Read that task card fully. Touch **only** the paths listed under "Allowed paths".
+   Exception: `docs/PROGRESS.md`, `docs/OPEN_QUESTIONS.md`, and `docs/DEPENDENCIES.md` are always allowed bookkeeping paths, even if a task card omits them.
 3. Implement. Run every command under "Acceptance". Paste real output in your summary.
 4. Tick the task in `docs/PROGRESS.md` ONLY if all acceptance commands pass.
 5. Run `make check`. Fix what you broke. Never disable a check to make it pass.
