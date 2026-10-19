@@ -83,7 +83,7 @@ Charts reference Secrets by name (`existingSecret`). Chart values contain **no**
 ## 9. MongoDB (database `urumi`)
 | Collection | Fields |
 |---|---|
-| `users` | `_id`, `email` (unique), `passwordHash`, `role`, `status` (`invited`\|`active`\|`disabled`), `inviteTokenHash?`, `createdAt` |
+| `users` | `_id`, `email` (unique), `passwordHash`, `role`, `status` (`invited`\|`active`\|`disabled`), `inviteTokenHash?`, `inviteExpiresAt?`, `createdAt` |
 | `apikeys` | `_id`, `userId`, `name`, `prefix` (unique), `hash`, `createdAt`, `lastUsedAt?`, `revokedAt?` |
 | `servers` | `_id`, `slug` (unique), `name`, `url`, `authType`, `headerName?`, `credentialEnc?` (AES-256-GCM: iv+tag+ciphertext, base64), `enabled`, `status` (`connected`\|`unreachable`\|`disabled`), `statusReason?`, `lastCheckedAt?`, `createdAt` |
 | `auditlogs` | `_id`, `ts`, `userId`, `userEmail`, `source` (`mcp`\|`chat`), `serverSlug`, `toolName`, `durationMs`, `outcome` (`success`\|`error`\|`timeout`\|`denied`), `errorMessage?` (≤ 300 chars, no secrets), `argsHash` |
@@ -95,12 +95,35 @@ POST   /api/auth/login | /api/auth/logout | GET /api/auth/me | POST /api/auth/ac
 GET    /api/servers                       (any user: slug,name,status,statusReason,toolCount,tools[])  — never credentials
 POST   /api/servers          (admin)      PATCH /api/servers/:id (admin)   DELETE /api/servers/:id (admin)
 POST   /api/servers/:id/refresh (admin)   re-check health + tools now
+
+Server CRUD request/response clarification (ADR-0012):
+- `GET /api/servers` returns `{ "servers": [{ "id", "slug", "name", "enabled", "status", "statusReason", "toolCount", "tools", "hasCredential" }] }` for any authenticated user. `hasCredential` is boolean; never return `credential` or `credentialEnc`.
+- `POST /api/servers` accepts strict JSON `{ "slug", "name", "url", "authType", "headerName?", "credential?", "enabled?" }`; `enabled` defaults to `true`. Slug follows §5 and is create-only. Duplicate slug returns 409; invalid input/unknown fields return 400.
+- `PATCH /api/servers/:id` accepts only `{ "name?", "url?", "authType?", "headerName?", "credential?", "enabled?" }`. `slug` is immutable and rejected with 400. Omitted `credential` preserves the stored value; a transition from `none` to `bearer` or `header` requires `credential` in that same request. Changing to `none` clears `credentialEnc` and `headerName`. Validate the resulting configuration atomically before persisting it.
+- `url` must be HTTP(S), at most 2048 characters, and have no embedded user-info. Cluster-internal hosts are allowed. `credential` is at most 4096 characters and cannot contain CR/LF. `headerName` must be an HTTP token and cannot be `host`, `content-length`, `content-type`, `accept`, `connection`, or `transfer-encoding` (case-insensitive). Authentication modes must be internally consistent as specified in ADR-0012.
+- POST/PATCH return 201/200 with `{ "server": { "id", "slug", "name", "url", "authType", "headerName?", "enabled", "status", "statusReason", "toolCount", "tools", "hasCredential", "createdAt" } }` as applicable; omit `headerName` unless relevant. Never return either credential field. DELETE returns `{ "status": "deleted" }`; refresh is admin-only.
+- Until T04 health/tool discovery runs, a newly created enabled server reports `status: "unreachable"`, `statusReason: "not checked yet"`, `toolCount: 0`, and `tools: []`; a disabled server reports `status: "disabled"`. SSRF destination filtering is not included in T03 and remains a documented hardening gap.
 GET    /api/users (admin)  POST /api/users/invite (admin)  PATCH /api/users/:id (admin)
 GET    /api/keys (own; admin may pass ?userId=)   POST /api/keys   DELETE /api/keys/:id (revoke)
+
+`POST /api/keys` clarification: strict JSON body `{ "name": string }`;
+trimmed name length 1–100; reject unknown fields with HTTP 400. The key is
+always created for the authenticated user, including when an admin calls the
+endpoint. Return HTTP 201 with `{ "key": "<full key>", "apiKey": { "id",
+"name", "prefix", "createdAt" } }`; the full key is shown only once, and
+the response includes `Cache-Control: no-store`. Key list responses contain
+only `id`, `name`, `prefix`, `createdAt`, `lastUsedAt`, and `revokedAt`;
+never return a hash or full key. Revocation is idempotent; a member cannot
+probe another user's key ID (return 404), while an admin can revoke any key.
 GET    /api/audit?limit&cursor&userId&server&outcome  (admin: all, member: own)
+
+Audit pagination clarification (ADR-0013): default `limit=50`; supplied limit must be an integer 1–100 or return 400. Response is `{ "items": [...], "nextCursor": string | null }`; fetch `limit+1` rows and return `nextCursor: null` on the final page. Sort by `(ts DESC, _id DESC)`. Cursor format is `<payload>.<signature>`: unpadded base64url compact JSON `{ "ts": "<ISO-8601 timestamp>", "id": "<24-hex ObjectId>" }` followed by an unpadded base64url HMAC-SHA256 signature of that payload segment, keyed by `SESSION_SECRET`. Verify the signature with a timing-safe comparison before trusting the decoded payload; reject malformed, non-canonical, invalid, or tampered cursors with 400. Rotating `SESSION_SECRET` invalidates outstanding cursors. Continue after the cursor with `ts < t OR (ts == t AND _id < id)`. Validate `userId`, `server` slug, and `outcome` enum strictly. Admins may filter across all users; members are always scoped to their own `userId`, and requesting another user's `userId` returns 403. Cursor never widens scope. Add index `{ ts: -1, _id: -1 }`. Audit responses never include raw credentials, API keys, invitation tokens, or full arguments; no update/delete audit routes exist.
+
 POST   /api/chat  { messages:[...] } → { reply, toolCalls:[{server,tool,ok,durationMs}] }
 GET    /healthz (no auth)
 ```
+POST /api/users/invite requires strict JSON `{ "email": string, "role": "member" | "admin" }`; unknown fields are rejected. It returns HTTP 201 with `{ "invitation": { "id", "email", "role", "status", "expiresAt" }, "token": "<token>" }` and `Cache-Control: no-store`. The token is 32 random bytes encoded as base64url, returned once, and only its SHA-256 hash is stored. Invitations expire after 24 hours. Re-inviting an invited user rotates the token and expiry; active accounts return 409. Disabled accounts also return 409; reactivation requires a separate explicit account-management action.
+POST /api/auth/accept-invite requires strict JSON `{ "token": string, "password": string }`; passwords must contain at least 12 characters and no more than 72 UTF-8 bytes. A valid, unexpired token activates an invited user and atomically clears `inviteTokenHash` and `inviteExpiresAt`. Invalid, expired, and already-used tokens all return HTTP 400 with the same error `{ "code": "invalid_invitation", "message": "Invitation is invalid or expired" }`.
 Errors: `{ "error": { "code": "...", "message": "..." } }` with correct HTTP status. Credentials are write-only fields.
 
 ## 11. Chat agent

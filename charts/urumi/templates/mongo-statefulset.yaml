@@ -87,9 +87,9 @@ spec:
               command:
                 - sh
                 - -ec
-                - mongosh --quiet --host 127.0.0.1 --eval 'db.adminCommand({ ping: 1 }).ok'
-            periodSeconds: 10
-            timeoutSeconds: 10
+                - "mongosh --quiet --host 127.0.0.1 --eval 'db.adminCommand({ ping: 1 }).ok'"
+            periodSeconds: 30
+            timeoutSeconds: 20
             failureThreshold: 3
 
           livenessProbe:
