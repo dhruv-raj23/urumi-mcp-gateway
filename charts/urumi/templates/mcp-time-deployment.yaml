@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-time
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mcp-time
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.mcpTime.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-time
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.labels" . | nindent 8 }}
+        app.kubernetes.io/name: mcp-time
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp-time
+          image: "{{ .Values.mcpTime.image.repository }}:{{ .Values.mcpTime.image.tag }}"
+          imagePullPolicy: {{ .Values.mcpTime.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 3002
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3002"
+            - name: UPSTREAM_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: urumi-mcp-time
+                  key: UPSTREAM_AUTH_TOKEN
+                  optional: true
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.mcpTime.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-time
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mcp-time
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3002
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mcp-time
+    app.kubernetes.io/instance: {{ .Release.Name }}
