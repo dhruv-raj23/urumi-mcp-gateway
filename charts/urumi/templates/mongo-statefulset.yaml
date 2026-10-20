@@ -1,0 +1,134 @@
+{{- $storageClass := .Values.mongo.persistence.storageClass | default .Values.global.storageClass }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mongo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mongo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mongo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  serviceName: mongo
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongo
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "urumi.labels" . | nindent 8 }}
+        app.kubernetes.io/name: mongo
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mongo
+          image: "{{ .Values.mongo.image.repository }}:{{ .Values.mongo.image.tag }}"
+          imagePullPolicy: {{ .Values.mongo.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: mongodb
+              containerPort: 27017
+              protocol: TCP
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: root
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mongo.existingSecret }}
+                  key: MONGO_INITDB_ROOT_PASSWORD
+            - name: MONGO_INITDB_DATABASE
+              value: urumi
+            - name: HOME
+              value: /tmp
+          startupProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 60
+
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - "mongosh --quiet --host 127.0.0.1 --eval 'db.adminCommand({ ping: 1 }).ok'"
+            periodSeconds: 30
+            timeoutSeconds: 20
+            failureThreshold: 3
+
+          livenessProbe:
+            tcpSocket:
+              port: mongodb
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.mongo.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+            - name: configdb
+              mountPath: /data/configdb
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: configdb
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  {{- if .Values.mongo.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "urumi.labels" . | nindent 10 }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.mongo.persistence.size }}
+        {{- if $storageClass }}
+        storageClassName: {{ $storageClass | quote }}
+        {{- end }}
+  {{- else }}
+      volumes:
+        - name: data
+          emptyDir: {}
+  {{- end }}
