@@ -6,3 +6,4 @@ Format: `- app | package | why`
 - gateway | mongodb | Official Node.js driver for MongoDB connections, typed collection operations, and indexes without an ODM.
 - gateway | zod | Runtime validation of REST request bodies, including rejection of unknown fields.
 - gateway | bcryptjs | Bcrypt password hashing and verification without native build dependencies.
+- gateway | @modelcontextprotocol/sdk | Official MCP client/server primitives and Streamable HTTP transport for stateless upstream aggregation.

@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ObjectId, type Collection } from "mongodb";
 
 import {
@@ -166,21 +168,32 @@ function buildFakeCollections(users: UserDocument[]): GatewayCollections {
         (document) => document.prefix === filter.prefix,
       ) ?? null,
     updateOne: async (
-      filter: { _id: ObjectId; userId?: ObjectId },
-      update: { $set: { revokedAt: Date } },
+      filter: {
+        _id: ObjectId;
+        userId?: ObjectId;
+        hash?: string;
+        revokedAt?: { $exists?: boolean };
+      },
+      update: {
+        $set: Partial<Pick<ApiKeyDocument, "revokedAt" | "lastUsedAt">>;
+      },
     ) => {
-      const document = apiKeyDocuments.find(
-        (candidate) =>
-          candidate._id.equals(filter._id) &&
-          (!filter.userId || candidate.userId.equals(filter.userId)),
-      );
+      const document = apiKeyDocuments.find((candidate) => {
+        if (!candidate._id.equals(filter._id)) return false;
+        if (filter.userId && !candidate.userId.equals(filter.userId)) return false;
+        if (filter.hash && candidate.hash !== filter.hash) return false;
+        if (filter.revokedAt?.$exists === false && candidate.revokedAt !== undefined) {
+          return false;
+        }
+        return true;
+      });
 
       if (!document) {
-        return { matchedCount: 0, modifiedCount: 0 };
+        return { acknowledged: true, matchedCount: 0, modifiedCount: 0 };
       }
 
-      document.revokedAt = update.$set.revokedAt;
-      return { matchedCount: 1, modifiedCount: 1 };
+      Object.assign(document, update.$set);
+      return { acknowledged: true, matchedCount: 1, modifiedCount: 1 };
     },
   } as unknown as Collection<ApiKeyDocument>;
 
@@ -253,6 +266,7 @@ beforeAll(async () => {
     sessionSecret: TEST_SECRET,
     cookieSecure: secureCookie,
     credentialEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
+    enableHealthLoop: false,
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -1043,5 +1057,108 @@ describe("gateway authentication HTTP routes", () => {
     await expect(
       findActiveApiKey(collections.apikeys, created.key),
     ).resolves.toBeNull();
+  });
+});
+
+
+describe("MCP endpoint authentication", () => {
+  async function postMcp(authorization?: string) {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    if (authorization !== undefined) {
+      headers.authorization = authorization;
+    }
+
+    return fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+    });
+  }
+
+  it("returns 401 when the client omits its API key", async () => {
+    const response = await postMcp();
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: "Unauthorized" },
+    });
+  });
+
+  it("returns 401 for malformed and unknown API keys", async () => {
+    const malformed = await postMcp("Bearer not-a-valid-key");
+    expect(malformed.status).toBe(401);
+
+    const unknown = await postMcp(`Bearer urumi_abcdefgh_${"A".repeat(43)}`);
+    expect(unknown.status).toBe(401);
+  });
+
+  it("returns 401 for a revoked API key", async () => {
+    const created = await createUserApiKey(
+      collections.apikeys,
+      memberId,
+      "MCP revoked-key test",
+    );
+
+    const revokeResponse = await fetch(
+      `${baseUrl}/api/keys/${created.apiKey.id}`,
+      {
+        method: "DELETE",
+        headers: {
+          cookie: sessionCookie(memberId),
+          "content-type": "application/json",
+        },
+      },
+    );
+    expect(revokeResponse.status).toBe(200);
+
+    const response = await postMcp(`Bearer ${created.key}`);
+    expect(response.status).toBe(401);
+  });
+
+  it("returns 401 when the API key belongs to a disabled user", async () => {
+    const created = await createUserApiKey(
+      collections.apikeys,
+      disabledId,
+      "MCP disabled-user test",
+    );
+
+    const response = await postMcp(`Bearer ${created.key}`);
+    expect(response.status).toBe(401);
+  });
+
+  it("supports initialize and tools/list for a valid active member key", async () => {
+    const created = await createUserApiKey(
+      collections.apikeys,
+      memberId,
+      "MCP valid-member test",
+    );
+
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`${baseUrl}/mcp`),
+      {
+        requestInit: {
+          headers: { Authorization: `Bearer ${created.key}` },
+        },
+      },
+    );
+
+    const client = new Client(
+      { name: "urumi-gateway-http-test", version: "1.0.0" },
+      { capabilities: {} },
+    );
+
+    try {
+      await client.connect(transport, { timeout: 5_000 });
+      const result = await client.listTools({}, { timeout: 5_000 });
+
+      // The fixture has no connected upstream servers.
+      expect(result.tools).toEqual([]);
+    } finally {
+      await client.close().catch(() => undefined);
+      await transport.close().catch(() => undefined);
+    }
   });
 });

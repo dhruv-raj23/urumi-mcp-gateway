@@ -19,6 +19,7 @@
     "vitest": "^2.1.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "bcryptjs": "^3.0.3",
     "mongodb": "^6.21.0",
     "zod": "^4.6.7"

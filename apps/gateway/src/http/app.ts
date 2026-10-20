@@ -26,6 +26,9 @@ import {
 } from "../auth/session.js";
 import type { GatewayCollections } from "../db/mongo.js";
 import type { ServerDocument, UserDocument } from "../db/models.js";
+import { configuredHealthCheckIntervalMs, startHealthLoop } from "../health/healthLoop.js";
+import { GatewayAggregator } from "../mcp/aggregator.js";
+import { handleMcpHttpRequest } from "../mcp/httpHandler.js";
 
 const MAX_JSON_BODY_BYTES = 32 * 1024;
 
@@ -181,6 +184,8 @@ export interface GatewayHttpConfig {
   cookieSecure: boolean;
   /** Optional test injection; production reads CREDENTIAL_ENCRYPTION_KEY from env. */
   credentialEncryptionKey?: string;
+  /** Optional test injection; the health loop is enabled by default. */
+  enableHealthLoop?: boolean;
 }
 
 class HttpFailure extends Error {
@@ -293,6 +298,7 @@ async function handleRequest(
   response: ServerResponse,
   collections: GatewayCollections,
   config: GatewayHttpConfig,
+  aggregator: GatewayAggregator,
 ): Promise<void> {
   const url = new URL(request.url ?? "/", "http://gateway.local");
   const method = request.method ?? "GET";
@@ -300,6 +306,18 @@ async function handleRequest(
 
   if (method === "GET" && path === "/healthz") {
     sendJson(response, 200, { status: "ok" });
+    return;
+  }
+
+  if (path === "/mcp") {
+    if (method !== "POST") {
+      request.resume();
+      response.setHeader("Allow", "POST");
+      sendError(response, 405, "method_not_allowed", "Only POST is supported at /mcp");
+      return;
+    }
+
+    await handleMcpHttpRequest(request, response, collections, aggregator);
     return;
   }
 
@@ -959,8 +977,13 @@ export function createGatewayServer(
     throw new Error("SESSION_SECRET is required");
   }
 
-  return createServer((request, response) => {
-    void handleRequest(request, response, collections, config).catch((error: unknown) => {
+  const aggregator = new GatewayAggregator(collections, {
+    credentialEncryptionKey: config.credentialEncryptionKey,
+  });
+  const healthIntervalMs = configuredHealthCheckIntervalMs();
+
+  const server = createServer((request, response) => {
+    void handleRequest(request, response, collections, config, aggregator).catch((error: unknown) => {
       if (response.headersSent) {
         response.destroy();
         return;
@@ -975,4 +998,19 @@ export function createGatewayServer(
       sendError(response, 500, "internal_error", "Internal server error");
     });
   });
+
+  let stopHealthLoop: (() => void) | undefined;
+
+  server.once("listening", () => {
+    if (config.enableHealthLoop === false) {
+      return;
+    }
+    stopHealthLoop = startHealthLoop(aggregator, healthIntervalMs);
+  });
+
+  server.once("close", () => {
+    stopHealthLoop?.();
+  });
+
+  return server;
 }
