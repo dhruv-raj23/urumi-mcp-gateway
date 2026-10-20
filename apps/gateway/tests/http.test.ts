@@ -22,6 +22,7 @@ const auditDocuments: AuditLogDocument[] = [];
 const memberId = new ObjectId();
 const adminId = new ObjectId();
 const disabledId = new ObjectId();
+let failingDiscoverySlug: string | null = null;
 
 function makeUser(
   id: ObjectId,
@@ -106,9 +107,13 @@ function buildFakeCollections(users: UserDocument[]): GatewayCollections {
 
   const serverDocuments: ServerDocument[] = [];
   const serversCollection = {
-    find: () => ({
+    find: (filter: Partial<ServerDocument> = {}) => ({
       sort: () => ({
-        toArray: async () => [...serverDocuments].sort((a, b) => a.slug.localeCompare(b.slug)),
+        toArray: async () => [...serverDocuments]
+          .filter((entry) => Object.entries(filter).every(
+            ([key, value]) => entry[key as keyof ServerDocument] === value,
+          ))
+          .sort((a, b) => a.slug.localeCompare(b.slug)),
       }),
     }),
     findOne: async (filter: { _id?: ObjectId; slug?: string }) =>
@@ -267,6 +272,24 @@ beforeAll(async () => {
     cookieSecure: secureCookie,
     credentialEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
     enableHealthLoop: false,
+    clientFactory: async (upstream) => ({
+      listTools: async () => {
+        if (failingDiscoverySlug === upstream.slug) {
+          throw new Error("simulated upstream discovery failure");
+        }
+        return {
+          tools: [{
+            name: "echo",
+            description: "Echo test tool",
+            inputSchema: { type: "object" as const, properties: {} },
+          }],
+        };
+      },
+      callTool: async () => ({
+        content: [{ type: "text" as const, text: "test result" }],
+      }),
+      close: async () => undefined,
+    }),
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -1159,6 +1182,160 @@ describe("MCP endpoint authentication", () => {
     } finally {
       await client.close().catch(() => undefined);
       await transport.close().catch(() => undefined);
+    }
+  });
+});
+
+
+describe("server tool metadata HTTP response", () => {
+  it("exposes discovered tool metadata and clears it when disabled or unreachable", async () => {
+    const upstream: ServerDocument = {
+      _id: new ObjectId(),
+      slug: "cache-test",
+      name: "Cache test upstream",
+      url: "http://cache-test.invalid/mcp",
+      authType: "none",
+      enabled: true,
+      status: "connected",
+      createdAt: new Date(),
+    };
+
+    await collections.servers.insertOne(upstream);
+
+    const createdKey = await createUserApiKey(
+      collections.apikeys,
+      memberId,
+      "server metadata integration test",
+    );
+
+    const fetchServer = async () => {
+      const response = await fetch(`${baseUrl}/api/servers`, {
+        headers: { cookie: sessionCookie(memberId) },
+      });
+      expect(response.status).toBe(200);
+
+      const body = await response.json() as {
+        servers: Array<{
+          id: string;
+          slug: string;
+          status: string;
+          enabled: boolean;
+          toolCount: number;
+          tools: Array<{ name: string; description: string }>;
+        }>;
+      };
+
+      const result = body.servers.find((server) => server.slug === upstream.slug);
+      expect(result).toBeDefined();
+      return result!;
+    };
+
+    const listMcpTools = async () => {
+      const transport = new StreamableHTTPClientTransport(
+        new URL(`${baseUrl}/mcp`),
+        {
+          requestInit: {
+            headers: { Authorization: `Bearer ${createdKey.key}` },
+          },
+        },
+      );
+      const client = new Client(
+        { name: "server-metadata-test", version: "1.0.0" },
+        { capabilities: {} },
+      );
+
+      try {
+        await client.connect(transport, { timeout: 5_000 });
+        return (await client.listTools({}, { timeout: 5_000 })).tools;
+      } finally {
+        await client.close().catch(() => undefined);
+        await transport.close().catch(() => undefined);
+      }
+    };
+
+    try {
+      // Cold cache should be empty before discovery happens.
+      const cold = await fetchServer();
+      expect(cold.toolCount).toBe(0);
+      expect(cold.tools).toEqual([]);
+
+      const discovered = await listMcpTools();
+      expect(discovered.map((tool) => tool.name)).toContain(
+        "cache-test__echo",
+      );
+
+      const healthy = await fetchServer();
+      expect(healthy.status).toBe("connected");
+      expect(healthy.toolCount).toBe(1);
+      expect(healthy.tools).toEqual([
+        {
+          name: "cache-test__echo",
+          description: "[cache-test] Echo test tool",
+        },
+      ]);
+
+      // Disabling through the real REST route must remove old metadata.
+      const disabledResponse = await fetch(
+        `${baseUrl}/api/servers/${upstream._id.toHexString()}`,
+        {
+          method: "PATCH",
+          headers: {
+            cookie: sessionCookie(adminId),
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ enabled: false }),
+        },
+      );
+
+      expect(disabledResponse.status).toBe(200);
+      const disabledBody = await disabledResponse.json() as {
+        server: { status: string; toolCount: number; tools: unknown[] };
+      };
+      expect(disabledBody.server.status).toBe("disabled");
+      expect(disabledBody.server.toolCount).toBe(0);
+      expect(disabledBody.server.tools).toEqual([]);
+
+      // Simulate an enabled server whose previously healthy discovery now fails.
+      const enabledResponse = await fetch(
+        `${baseUrl}/api/servers/${upstream._id.toHexString()}`,
+        {
+          method: "PATCH",
+          headers: {
+            cookie: sessionCookie(adminId),
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ enabled: true }),
+        },
+      );
+      expect(enabledResponse.status).toBe(200);
+
+      // Represent a previously successful health check; the next discovery fails.
+      upstream.status = "connected";
+      failingDiscoverySlug = upstream.slug;
+
+      const failedDiscovery = await listMcpTools();
+      expect(failedDiscovery.map((tool) => tool.name)).not.toContain(
+        "cache-test__echo",
+      );
+
+      const unreachable = await fetchServer();
+      expect(unreachable.status).toBe("unreachable");
+      expect(unreachable.toolCount).toBe(0);
+      expect(unreachable.tools).toEqual([]);
+    } finally {
+      failingDiscoverySlug = null;
+
+      const revoke = await fetch(
+        `${baseUrl}/api/keys/${createdKey.apiKey.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            cookie: sessionCookie(memberId),
+            "content-type": "application/json",
+          },
+        },
+      );
+      expect(revoke.status).toBe(200);
     }
   });
 });

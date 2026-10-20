@@ -27,7 +27,11 @@ import {
 import type { GatewayCollections } from "../db/mongo.js";
 import type { ServerDocument, UserDocument } from "../db/models.js";
 import { configuredHealthCheckIntervalMs, startHealthLoop } from "../health/healthLoop.js";
-import { GatewayAggregator } from "../mcp/aggregator.js";
+import {
+  GatewayAggregator,
+  type PublicServerTool,
+  type UpstreamMcpClientFactory,
+} from "../mcp/aggregator.js";
 import { handleMcpHttpRequest } from "../mcp/httpHandler.js";
 
 const MAX_JSON_BODY_BYTES = 32 * 1024;
@@ -161,7 +165,10 @@ const patchServerSchema = z.object({
   }
 });
 
-function publicServer(server: ServerDocument) {
+function publicServer(
+  server: ServerDocument,
+  tools: PublicServerTool[] = [],
+) {
   return {
     id: server._id.toHexString(),
     slug: server.slug,
@@ -172,8 +179,8 @@ function publicServer(server: ServerDocument) {
     enabled: server.enabled,
     status: server.status,
     ...(server.statusReason === undefined ? {} : { statusReason: server.statusReason }),
-    toolCount: 0,
-    tools: [],
+    toolCount: tools.length,
+    tools,
     hasCredential: Boolean(server.credentialEnc),
     createdAt: server.createdAt,
   };
@@ -184,6 +191,8 @@ export interface GatewayHttpConfig {
   cookieSecure: boolean;
   /** Optional test injection; production reads CREDENTIAL_ENCRYPTION_KEY from env. */
   credentialEncryptionKey?: string;
+  /** Optional upstream client injection for integration tests. */
+  clientFactory?: UpstreamMcpClientFactory;
   /** Optional test injection; the health loop is enabled by default. */
   enableHealthLoop?: boolean;
 }
@@ -540,7 +549,11 @@ async function handleRequest(
     }
 
     const servers = await collections.servers.find({}).sort({ slug: 1 }).toArray();
-    sendJson(response, 200, { servers: servers.map(publicServer) });
+    sendJson(response, 200, {
+      servers: servers.map((server) =>
+        publicServer(server, aggregator.getCachedTools(server)),
+      ),
+    });
     return;
   }
 
@@ -626,6 +639,7 @@ async function handleRequest(
         sendError(response, 404, "server_not_found", "Server not found");
         return;
       }
+      aggregator.invalidateServerTools(existing.slug);
       sendJson(response, 200, { status: "deleted" });
       return;
     }
@@ -680,10 +694,19 @@ async function handleRequest(
 
     const enabled = input.enabled ?? existing.enabled;
     const transitionedToEnabled = enabled && !existing.enabled;
+    const discoveryConfigChanged =
+      input.url !== undefined ||
+      input.authType !== undefined ||
+      credentialProvided ||
+      headerNameProvided;
     const status = !enabled ? "disabled" :
-      transitionedToEnabled ? "unreachable" : existing.status;
+      transitionedToEnabled || discoveryConfigChanged
+        ? "unreachable"
+        : existing.status;
     const statusReason = !enabled ? "disabled" :
-      transitionedToEnabled ? "not checked yet" : existing.statusReason;
+      transitionedToEnabled ? "not checked yet" :
+      discoveryConfigChanged ? "configuration changed; health check pending" :
+      existing.statusReason;
     const setValues: Partial<ServerDocument> = {
       name: input.name ?? existing.name,
       url: input.url ?? existing.url,
@@ -720,7 +743,12 @@ async function handleRequest(
       sendError(response, 404, "server_not_found", "Server not found");
       return;
     }
-    sendJson(response, 200, { server: publicServer(updated) });
+    if (!enabled || transitionedToEnabled || discoveryConfigChanged) {
+      aggregator.invalidateServerTools(existing.slug);
+    }
+    sendJson(response, 200, {
+      server: publicServer(updated, aggregator.getCachedTools(updated)),
+    });
     return;
   }
 
@@ -979,6 +1007,9 @@ export function createGatewayServer(
 
   const aggregator = new GatewayAggregator(collections, {
     credentialEncryptionKey: config.credentialEncryptionKey,
+    ...(config.clientFactory === undefined
+      ? {}
+      : { clientFactory: config.clientFactory }),
   });
   const healthIntervalMs = configuredHealthCheckIntervalMs();
 

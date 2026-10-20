@@ -27,6 +27,7 @@ const DEFAULT_LIST_TIMEOUT_MS = 5_000;
 const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 const MAX_TOOL_RESULT_BYTES = 100_000;
 const MAX_TOOL_LIST_BYTES = 100_000;
+const TOOL_METADATA_CACHE_TTL_MS = 60_000;
 
 export interface GatewayMcpUser {
   userId: ObjectId;
@@ -250,6 +251,16 @@ function prefixToolResult(
 
 type ListedTool = ListToolsResult["tools"][number];
 
+export interface PublicServerTool {
+  name: string;
+  description: string;
+}
+
+interface ToolMetadataCacheEntry {
+  tools: PublicServerTool[];
+  expiresAt: number;
+}
+
 interface DiscoveryResult {
   tools: ListedTool[];
   warning?: string;
@@ -264,6 +275,7 @@ export class GatewayAggregator {
   private readonly callTimeoutMs: number;
   private readonly encryptionKey: string | undefined;
   private readonly clientFactory: UpstreamMcpClientFactory;
+  private readonly toolMetadataCache = new Map<string, ToolMetadataCacheEntry>();
 
   constructor(
     private readonly collections: GatewayCollections,
@@ -285,6 +297,37 @@ export class GatewayAggregator {
       options.clientFactory ??
       ((server, timeoutMs) =>
         createSdkUpstreamClient(server, this.encryptionKey, timeoutMs));
+  }
+
+  getCachedTools(
+    server: Pick<ServerDocument, "slug" | "enabled" | "status">,
+  ): PublicServerTool[] {
+    if (!server.enabled || server.status !== "connected") {
+      this.invalidateServerTools(server.slug);
+      return [];
+    }
+
+    const entry = this.toolMetadataCache.get(server.slug);
+    if (!entry || entry.expiresAt <= Date.now()) {
+      this.invalidateServerTools(server.slug);
+      return [];
+    }
+
+    return entry.tools.map((tool) => ({ ...tool }));
+  }
+
+  invalidateServerTools(serverSlug: string): void {
+    this.toolMetadataCache.delete(serverSlug);
+  }
+
+  private cacheServerTools(serverSlug: string, tools: ListedTool[]): void {
+    this.toolMetadataCache.set(serverSlug, {
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description ?? "",
+      })),
+      expiresAt: Date.now() + TOOL_METADATA_CACHE_TTL_MS,
+    });
   }
 
   /**
@@ -310,6 +353,7 @@ export class GatewayAggregator {
             "connected",
             discovered.warning,
           );
+          this.cacheServerTools(server.slug, discovered.tools);
 
           return { server, ...discovered };
         } catch (error: unknown) {
@@ -386,6 +430,7 @@ export class GatewayAggregator {
       servers.map(async (server) => {
         if (!server.enabled) {
           await this.setServerStatus(server, "disabled");
+          this.invalidateServerTools(server.slug);
           return;
         }
 
@@ -400,6 +445,7 @@ export class GatewayAggregator {
             "connected",
             discovered.warning,
           );
+          this.cacheServerTools(server.slug, discovered.tools);
         } catch (error: unknown) {
           const reason =
             error instanceof UpstreamTimeoutError
@@ -593,6 +639,10 @@ export class GatewayAggregator {
     status: ServerStatus,
     statusReason?: string,
   ): Promise<void> {
+    if (status !== "connected") {
+      this.invalidateServerTools(server.slug);
+    }
+
     try {
       if (statusReason !== undefined) {
         await this.collections.servers.updateOne(

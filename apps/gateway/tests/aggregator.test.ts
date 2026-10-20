@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type {
   CallToolResult,
@@ -387,5 +387,110 @@ describe("GatewayAggregator.callTool", () => {
 
     expect(result.isError).toBe(true);
     expect(fixture.audits[0]?.outcome).toBe("error");
+  });
+});
+
+describe("GatewayAggregator cached tool metadata", () => {
+  it("exposes discovered tool names and descriptions for the server API", async () => {
+    const server = makeServer("time");
+    const fixture = makeCollections([server]);
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: makeFactory(),
+    });
+
+    expect(aggregator.getCachedTools(server)).toEqual([]);
+
+    await aggregator.listTools(makeUser());
+
+    expect(aggregator.getCachedTools(server)).toEqual([
+      {
+        name: "time__echo",
+        description: "[time] Tool echo",
+      },
+    ]);
+  });
+
+  it("expires cached metadata after 60 seconds", async () => {
+    vi.useFakeTimers();
+
+    try {
+      vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
+
+      const server = makeServer("time");
+      const fixture = makeCollections([server]);
+      const aggregator = new GatewayAggregator(fixture.collections, {
+        clientFactory: makeFactory(),
+      });
+
+      await aggregator.listTools(makeUser());
+      expect(aggregator.getCachedTools(server)).toHaveLength(1);
+
+      vi.setSystemTime(new Date("2026-10-20T12:01:00.001Z"));
+
+      expect(aggregator.getCachedTools(server)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears cached metadata when discovery fails", async () => {
+    let shouldFail = false;
+    const server = makeServer("woo");
+    const fixture = makeCollections([server]);
+
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: makeFactory({
+        listTools: async () => {
+          if (shouldFail) throw new Error("upstream unavailable");
+          return { tools: [makeTool("list_orders")] };
+        },
+      }),
+    });
+
+    await aggregator.listTools(makeUser());
+
+    expect(aggregator.getCachedTools(server)).toEqual([
+      {
+        name: "woo__list_orders",
+        description: "[woo] Tool list_orders",
+      },
+    ]);
+
+    shouldFail = true;
+    await aggregator.listTools(makeUser());
+
+    expect(server.status).toBe("unreachable");
+    expect(aggregator.getCachedTools(server)).toEqual([]);
+  });
+
+  it("clears cached metadata when a server becomes disabled", async () => {
+    const server = makeServer("notes");
+    const fixture = makeCollections([server]);
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: makeFactory(),
+    });
+
+    await aggregator.listTools(makeUser());
+    expect(aggregator.getCachedTools(server)).toHaveLength(1);
+
+    server.enabled = false;
+    await aggregator.refreshAllServerHealth();
+
+    expect(server.status).toBe("disabled");
+    expect(aggregator.getCachedTools(server)).toEqual([]);
+  });
+
+  it("does not expose cached metadata while a server is unreachable", async () => {
+    const server = makeServer("woo");
+    const fixture = makeCollections([server]);
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: makeFactory(),
+    });
+
+    await aggregator.listTools(makeUser());
+    expect(aggregator.getCachedTools(server)).toHaveLength(1);
+
+    server.status = "unreachable";
+    expect(aggregator.getCachedTools(server)).toEqual([]);
   });
 });
