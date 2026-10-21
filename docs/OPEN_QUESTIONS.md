@@ -57,3 +57,9 @@ Format: `- [ ] (Txx) question — proposed default — status`
 - [x] (T03) Disabled-user invitation policy — return HTTP 409; reactivation must be a separate explicit account-management action. Only users still in `invited` status may be re-invited; active users also return HTTP 409 — resolved by owner decision on 19 Oct 2026.
 
 - [x] (T04) MCP route and dependency scope — approved by the owner on 20 Oct 2026: T04 may update `apps/gateway/src/http/app.ts`, `apps/gateway/package.json`, `apps/gateway/package-lock.json`, and `docs/DEPENDENCIES.md`. Keep MCP implementation logic under `apps/gateway/src/mcp/` and `apps/gateway/src/health/`; tests remain under the gateway test directory. No contract change; follow ADR-0002.
+
+## T06 member-disable endpoint
+
+- [x] **Resolved 21 Oct 2026 via ADR-0014:** strict `{ "status": "disabled" }` request; HTTP 200 public-user response; admin-only; only member accounts can be disabled; active and invited members may transition to disabled; invited tokens are cleared; repeat requests for already-disabled members are idempotent; no reactivation through this endpoint.
+- **Implementation:** tracked in `docs/tasks/T06A-member-disable-endpoint.md`.
+- **T06 impact:** member disablement remains incomplete until the backend route and tests pass and the dashboard workflow is verified in the browser.

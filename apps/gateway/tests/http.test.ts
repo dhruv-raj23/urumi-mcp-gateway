@@ -73,6 +73,7 @@ function buildFakeCollections(users: UserDocument[]): GatewayCollections {
     updateOne: async (
       filter: {
         _id?: ObjectId;
+        role?: UserDocument["role"];
         status?: UserDocument["status"];
         inviteTokenHash?: string;
         inviteExpiresAt?: { $gt: Date };
@@ -81,6 +82,7 @@ function buildFakeCollections(users: UserDocument[]): GatewayCollections {
     ) => {
       const user = users.find((candidate) => {
         if (filter._id && !candidate._id.equals(filter._id)) return false;
+        if (filter.role && candidate.role !== filter.role) return false;
         if (filter.status && candidate.status !== filter.status) return false;
         if (filter.inviteTokenHash && candidate.inviteTokenHash !== filter.inviteTokenHash) return false;
         if (filter.inviteExpiresAt?.$gt) {
@@ -464,6 +466,191 @@ describe("gateway authentication HTTP routes", () => {
     expect(body.users).toHaveLength(3);
     expect(body.users[0]).not.toHaveProperty("passwordHash");
     expect(body.users[0]).not.toHaveProperty("inviteTokenHash");
+  });
+
+  it("requires an authenticated administrator to disable a member", async () => {
+    const target = makeUser(
+      new ObjectId(),
+      "disable-auth-check@example.com",
+      "member",
+    );
+    await collections.users.insertOne(target);
+
+    const endpoint = `${baseUrl}/api/users/${target._id.toHexString()}`;
+    const request = (cookie?: string) =>
+      fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(cookie ? { cookie } : {}),
+        },
+        body: JSON.stringify({ status: "disabled" }),
+      });
+
+    expect((await request()).status).toBe(401);
+    expect((await request(sessionCookie(memberId))).status).toBe(403);
+    expect(target.status).toBe("active");
+  });
+
+  it("validates member-disable IDs and strict request bodies", async () => {
+    const cases = [
+      {
+        label: "malformed ID",
+        id: "not-an-object-id",
+        body: { status: "disabled" },
+        expectedStatus: 400,
+      },
+      {
+        label: "unsupported status",
+        id: memberId.toHexString(),
+        body: { status: "active" },
+        expectedStatus: 400,
+      },
+      {
+        label: "unknown field",
+        id: memberId.toHexString(),
+        body: { status: "disabled", role: "admin" },
+        expectedStatus: 400,
+      },
+      {
+        label: "missing user",
+        id: new ObjectId().toHexString(),
+        body: { status: "disabled" },
+        expectedStatus: 404,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const response = await fetch(
+        `${baseUrl}/api/users/${testCase.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            cookie: sessionCookie(adminId),
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(testCase.body),
+        },
+      );
+
+      expect(response.status, testCase.label).toBe(testCase.expectedStatus);
+    }
+  });
+
+  it("does not allow an administrator account to be disabled", async () => {
+    const response = await fetch(
+      `${baseUrl}/api/users/${adminId.toHexString()}`,
+      {
+        method: "PATCH",
+        headers: {
+          cookie: sessionCookie(adminId),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "disabled" }),
+      },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "user_not_disableable" },
+    });
+  });
+
+  it("disables an active member, invalidates access, and is idempotent", async () => {
+    const target = makeUser(
+      new ObjectId(),
+      "disable-active-member@example.com",
+      "member",
+    );
+    await collections.users.insertOne(target);
+
+    const createdKey = await createUserApiKey(
+      collections.apikeys,
+      target._id,
+      "member disable regression",
+    );
+
+    const endpoint = `${baseUrl}/api/users/${target._id.toHexString()}`;
+    const disable = () =>
+      fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          cookie: sessionCookie(adminId),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "disabled" }),
+      });
+
+    const response = await disable();
+    expect(response.status).toBe(200);
+
+    const body = await response.json() as {
+      user: Record<string, unknown>;
+    };
+    expect(body.user).toEqual({
+      id: target._id.toHexString(),
+      email: target.email,
+      role: "member",
+      status: "disabled",
+      createdAt: target.createdAt.toISOString(),
+    });
+    expect(body.user).not.toHaveProperty("passwordHash");
+    expect(body.user).not.toHaveProperty("inviteTokenHash");
+
+    const sessionResponse = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: { cookie: sessionCookie(target._id) },
+    });
+    expect(sessionResponse.status).toBe(401);
+
+    const apiKeyResponse = await fetch(`${baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${createdKey.key}`,
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+    });
+    expect(apiKeyResponse.status).toBe(401);
+
+    const repeated = await disable();
+    expect(repeated.status).toBe(200);
+    await expect(repeated.json()).resolves.toMatchObject({
+      user: {
+        id: target._id.toHexString(),
+        status: "disabled",
+      },
+    });
+  });
+
+  it("disables an invited member and clears invitation state", async () => {
+    const target = makeUser(
+      new ObjectId(),
+      "disable-invited-member@example.com",
+      "member",
+      "invited",
+    );
+    target.inviteTokenHash = "fixture-invite-hash";
+    target.inviteExpiresAt = new Date("2026-10-22T00:00:00.000Z");
+    await collections.users.insertOne(target);
+
+    const response = await fetch(
+      `${baseUrl}/api/users/${target._id.toHexString()}`,
+      {
+        method: "PATCH",
+        headers: {
+          cookie: sessionCookie(adminId),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "disabled" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+
+    const stored = await collections.users.findOne({ _id: target._id });
+    expect(stored?.status).toBe("disabled");
+    expect(stored?.inviteTokenHash).toBeUndefined();
+    expect(stored?.inviteExpiresAt).toBeUndefined();
   });
 
   it("issues a no-store invitation and accepts its token exactly once", async () => {

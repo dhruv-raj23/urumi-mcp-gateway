@@ -69,6 +69,10 @@ const createApiKeySchema = z.object({
   name: z.string().trim().min(1).max(100),
 }).strict();
 
+const disableUserSchema = z.object({
+  status: z.literal("disabled"),
+}).strict();
+
 
 const SERVER_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,23}$/;
 const HTTP_TOKEN_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
@@ -275,6 +279,17 @@ function publicIdentity(user: UserDocument) {
     id: user._id.toHexString(),
     email: user.email,
     role: user.role,
+  };
+}
+
+/** Return only fields permitted by the member-disable API contract. */
+function publicDisabledUser(user: UserDocument) {
+  return {
+    id: user._id.toHexString(),
+    email: user.email,
+    role: user.role,
+    status: "disabled" as const,
+    createdAt: user.createdAt,
   };
 }
 
@@ -538,6 +553,98 @@ async function handleRequest(
         createdAt: entry.createdAt,
       })),
     });
+    return;
+  }
+
+  const patchUserMatch = path.match(/^\/api\/users\/([^/]+)$/);
+  if (method === "PATCH" && patchUserMatch) {
+    const actor = await getActiveSessionUser(
+      request,
+      collections,
+      config.sessionSecret,
+    );
+
+    if (!actor) {
+      sendError(response, 401, "unauthenticated", "Authentication required");
+      return;
+    }
+
+    if (actor.role !== "admin") {
+      sendError(response, 403, "forbidden", "Administrator access required");
+      return;
+    }
+
+    const rawUserId = patchUserMatch[1];
+    if (!rawUserId || !/^[a-fA-F0-9]{24}$/.test(rawUserId)) {
+      sendError(response, 400, "invalid_user_id", "User ID must be a 24-character ObjectId");
+      return;
+    }
+
+    const parsed = disableUserSchema.safeParse(await readJsonBody(request));
+    if (!parsed.success) {
+      sendError(response, 400, "invalid_body", "Invalid member-disable request");
+      return;
+    }
+
+    const targetId = new ObjectId(rawUserId);
+    const target = await collections.users.findOne({ _id: targetId });
+
+    if (!target) {
+      sendError(response, 404, "user_not_found", "User not found");
+      return;
+    }
+
+    if (target.role !== "member") {
+      sendError(
+        response,
+        409,
+        "user_not_disableable",
+        "Administrator accounts cannot be disabled through this endpoint",
+      );
+      return;
+    }
+
+    if (target.status === "disabled") {
+      sendJson(response, 200, { user: publicDisabledUser(target) });
+      return;
+    }
+
+    const update = await collections.users.updateOne(
+      {
+        _id: targetId,
+        role: "member",
+        status: target.status,
+      },
+      {
+        $set: { status: "disabled" },
+        $unset: { inviteTokenHash: "", inviteExpiresAt: "" },
+      },
+    );
+
+    if (update.matchedCount === 0) {
+      // Another request may have changed the user since the initial read.
+      const current = await collections.users.findOne({ _id: targetId });
+
+      if (!current) {
+        sendError(response, 404, "user_not_found", "User not found");
+        return;
+      }
+
+      if (current.role === "member" && current.status === "disabled") {
+        sendJson(response, 200, { user: publicDisabledUser(current) });
+        return;
+      }
+
+      sendError(
+        response,
+        409,
+        "user_state_conflict",
+        "User state changed; refresh the user list and retry",
+      );
+      return;
+    }
+
+    sendJson(response, 200, { user: publicDisabledUser(target) });
     return;
   }
 
