@@ -7,8 +7,9 @@ Deadline 26 Oct 2026. Order matters; do not start a task before its dependencies
 - [x] T03 Gateway: data, auth, keys, servers CRUD, audit (19–20 Oct)
 - [x] T04 Gateway: MCP aggregation + routing + failure handling (20–21 Oct)
 - [x] T05 Extra upstreams mcp-time + mcp-notes        (21–22 Oct)
-- [ ] T06 Dashboard                                   (22–23 Oct)
-  - Required acceptance subtask: `docs/tasks/T06A-member-disable-endpoint.md`.
+- [x] T06 Dashboard — dashboard and browser acceptance verified (21 Oct 2026)
+  - [x] T06A member-disable endpoint — commit `2b5bee9`; gateway image `t06a-user-disable-20261021-1` deployed.
+  - Dashboard image `t06-20261021-5` deployed at Helm revision 29; browser workflows verified.
 - [ ] T07 Chat agent                                  (23–24 Oct)
 - [ ] T08 NetworkPolicy + hardening                   (24–25 Oct)
 - [ ] T09 Prod values + upgrade/rollback docs         (25 Oct)
