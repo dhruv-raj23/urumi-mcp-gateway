@@ -1,0 +1,378 @@
+{{- if .Values.networkPolicy.enabled }}
+# Deny all ingress and egress by default within this namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-default-deny
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Permit DNS queries to CoreDNS in kube-system.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-dns
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Traefik -> dashboard.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-traefik-dashboard
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+              app.kubernetes.io/instance: traefik-kube-system
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Traefik -> gateway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-traefik-gateway
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+              app.kubernetes.io/instance: traefik-kube-system
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# Traefik and WooCommerce MCP -> WordPress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-wordpress-ingress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+              app.kubernetes.io/instance: traefik-kube-system
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: woo-mcp
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Gateway -> WooCommerce MCP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-woo-mcp-ingress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: woo-mcp
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3001
+---
+# Gateway -> time MCP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-mcp-time-ingress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-time
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3002
+---
+# Gateway -> notes MCP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-mcp-notes-ingress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-notes
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3003
+---
+# Gateway -> MongoDB.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-mongo-ingress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mongo
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 27017
+---
+# WordPress and its bootstrap Job -> MariaDB.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-mariadb-ingress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mariadb
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: wordpress
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: wordpress-bootstrap
+      ports:
+        - protocol: TCP
+          port: 3306
+---
+# Gateway -> required application backends and external HTTPS (Gemini).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gateway-egress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: woo-mcp
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3001
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-time
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3002
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-notes
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3003
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mongo
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 27017
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# WooCommerce MCP -> WordPress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-woo-mcp-egress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: woo-mcp
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: wordpress
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# WordPress runtime -> MariaDB.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-wordpress-egress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mariadb
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3306
+---
+# Bootstrap Job -> MariaDB and HTTPS for WooCommerce download.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-wordpress-bootstrap-egress
+  labels:
+    {{- include "urumi.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wordpress-bootstrap
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mariadb
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 3306
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+{{- end }}
