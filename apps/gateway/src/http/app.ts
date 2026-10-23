@@ -33,6 +33,7 @@ import {
   type UpstreamMcpClientFactory,
 } from "../mcp/aggregator.js";
 import { handleMcpHttpRequest } from "../mcp/httpHandler.js";
+import { ChatAgentError, runChatAgent } from "../chat/agent.js";
 
 const MAX_JSON_BODY_BYTES = 32 * 1024;
 
@@ -462,6 +463,49 @@ async function handleRequest(
     }
 
     sendJson(response, 200, { user: publicIdentity(user) });
+    return;
+  }
+
+  if (method === "POST" && path === "/api/chat") {
+    const user = await getActiveSessionUser(
+      request,
+      collections,
+      config.sessionSecret,
+    );
+
+    if (!user) {
+      sendError(response, 401, "unauthenticated", "Authentication required");
+      return;
+    }
+
+    // Identity always comes from the verified session, never client JSON.
+    const body = await readJsonBody(request);
+
+    try {
+      const result = await runChatAgent(
+        {
+          userId: user._id,
+          email: user.email,
+          role: user.role,
+        },
+        body,
+        aggregator,
+      );
+      sendJson(response, 200, result);
+    } catch (error: unknown) {
+      if (error instanceof ChatAgentError) {
+        sendError(response, error.status, error.code, error.message);
+        return;
+      }
+
+      // Do not expose provider errors, request headers, message bodies, or secrets.
+      sendError(
+        response,
+        503,
+        "chat_unavailable",
+        "The chat service is temporarily unavailable. Please try again.",
+      );
+    }
     return;
   }
 

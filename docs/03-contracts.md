@@ -43,7 +43,7 @@ Charts reference Secrets by name (`existingSecret`). Chart values contain **no**
 ## 4. Environment variables
 **gateway:** `PORT=3000`, `MONGO_URI`, `CREDENTIAL_ENCRYPTION_KEY`, `SESSION_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`,
 `UPSTREAM_LIST_TIMEOUT_MS=5000`, `UPSTREAM_CALL_TIMEOUT_MS=30000`, `HEALTH_CHECK_INTERVAL_MS=15000`,
-`LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `COOKIE_SECURE` (`false` local, `true` prod), `PUBLIC_BASE_URL`.
+`LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_MODELS`, `LLM_API_KEY`, `COOKIE_SECURE` (`false` local, `true` prod), `PUBLIC_BASE_URL`.
 **woo-mcp:** `PORT=3001`, `WC_BASE_URL` (in-cluster WordPress URL), `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`, `UPSTREAM_AUTH_TOKEN`.
 **mcp-time / mcp-notes:** `PORT`, `UPSTREAM_AUTH_TOKEN` (optional bearer check).
 **dashboard:** build-time only; calls same-origin `/api`.
@@ -129,7 +129,7 @@ POST /api/auth/accept-invite requires strict JSON `{ "token": string, "password"
 Errors: `{ "error": { "code": "...", "message": "..." } }` with correct HTTP status. Credentials are write-only fields.
 
 ## 11. Chat agent
-- Provider-agnostic via OpenAI-compatible Chat Completions with tools (`LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`).
+- Provider-agnostic via OpenAI-compatible Chat Completions with tools (`LLM_BASE_URL`, `LLM_MODEL`, `LLM_MODELS`, `LLM_API_KEY`). When `LLM_MODELS` is non-empty, candidates are attempted in configured order; otherwise, `LLM_MODEL` provides the single-model compatibility fallback.
 - Tool list comes from the same aggregator function as `/mcp`, for the logged-in user. Calls go through the same
   `callTool(user, source='chat', ...)` function → audited under that user. Max 8 tool-loop iterations. Tool results are
   treated as untrusted data (see `docs/rules/mcp.md`).

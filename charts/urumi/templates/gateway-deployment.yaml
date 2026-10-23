@@ -89,6 +89,8 @@ spec:
               value: {{ .Values.gateway.llm.baseUrl | quote }}
             - name: LLM_MODEL
               value: {{ .Values.gateway.llm.model | quote }}
+            - name: LLM_MODELS
+              value: {{ join "," .Values.gateway.llm.models | quote }}
             - name: UPSTREAM_LIST_TIMEOUT_MS
               value: {{ .Values.gateway.timeouts.listMs | quote }}
             - name: UPSTREAM_CALL_TIMEOUT_MS

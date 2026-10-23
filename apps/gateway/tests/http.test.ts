@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createServer } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ObjectId, type Collection } from "mongodb";
@@ -19,6 +20,7 @@ const secureCookie = false;
 
 let passwordHash: string;
 const auditDocuments: AuditLogDocument[] = [];
+const serverDocuments: ServerDocument[] = [];
 const memberId = new ObjectId();
 const adminId = new ObjectId();
 const disabledId = new ObjectId();
@@ -107,7 +109,6 @@ function buildFakeCollections(users: UserDocument[]): GatewayCollections {
     }),
   } as unknown as Collection<UserDocument>;
 
-  const serverDocuments: ServerDocument[] = [];
   const serversCollection = {
     find: (filter: Partial<ServerDocument> = {}) => ({
       sort: () => ({
@@ -1524,5 +1525,264 @@ describe("server tool metadata HTTP response", () => {
       );
       expect(revoke.status).toBe(200);
     }
+  });
+});
+
+
+describe("chat HTTP route integration", () => {
+  it("uses the authenticated user, exposes only eligible tools, and audits real tool calls", async () => {
+    const envSnapshot = {
+      LLM_PROVIDER: process.env.LLM_PROVIDER,
+      LLM_BASE_URL: process.env.LLM_BASE_URL,
+      LLM_API_KEY: process.env.LLM_API_KEY,
+      LLM_MODEL: process.env.LLM_MODEL,
+    };
+    const originalFailingDiscoverySlug = failingDiscoverySlug;
+    const originalServerLength = serverDocuments.length;
+    const originalServerStates = serverDocuments.map((document) => ({
+      document,
+      enabled: document.enabled,
+      status: document.status,
+    }));
+
+    // Synthetic test-only credential. Never print or persist it.
+    const testApiKey = ["fake", "chat", "key", "route"].join("-");
+    const providerRequests: Array<{
+      authorization: string | undefined;
+      path: string;
+      payload: {
+        messages?: Array<{ role?: string; content?: unknown }>;
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+    }> = [];
+    const providerErrors: unknown[] = [];
+
+    const provider = createServer(async (request, response) => {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) {
+          chunks.push(Buffer.from(chunk));
+        }
+
+        const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+          messages?: Array<{ role?: string; content?: unknown }>;
+          tools?: Array<{ function?: { name?: string } }>;
+        };
+
+        providerRequests.push({
+          authorization: request.headers.authorization,
+          path: request.url ?? "",
+          payload,
+        });
+
+        const hasToolResult = payload.messages?.some(
+          (message) => message.role === "tool",
+        ) ?? false;
+
+        const completion = hasToolResult
+          ? {
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content: "The test tool found the requested result.",
+                },
+              }],
+            }
+          : {
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content: null,
+                  tool_calls: [{
+                    id: "test-call-1",
+                    type: "function",
+                    function: {
+                      name: "testchat__echo",
+                      arguments: JSON.stringify({ message: "hello" }),
+                    },
+                  }],
+                },
+              }],
+            };
+
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(completion));
+      } catch (error: unknown) {
+        providerErrors.push(error);
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "synthetic provider failure" }));
+      }
+    });
+
+    const makeServerDocument = (
+      slug: string,
+      enabled: boolean,
+      status: ServerDocument["status"],
+    ): ServerDocument => ({
+      _id: new ObjectId(),
+      slug,
+      name: `Chat integration ${slug}`,
+      url: "http://127.0.0.1:65535/mcp",
+      authType: "none",
+      enabled,
+      status,
+      createdAt: new Date(),
+    } as ServerDocument);
+
+    try {
+      // Keep unrelated fixtures from affecting this test's tool list.
+      for (const document of serverDocuments) {
+        document.enabled = false;
+        document.status = "disabled";
+      }
+
+      serverDocuments.push(
+        makeServerDocument("testchat", true, "connected"),
+        makeServerDocument("disabledchat", false, "disabled"),
+        makeServerDocument("offlinechat", true, "unreachable"),
+      );
+      failingDiscoverySlug = null;
+
+      await new Promise<void>((resolve, reject) => {
+        provider.once("error", reject);
+        provider.listen(0, "127.0.0.1", () => {
+          provider.off("error", reject);
+          resolve();
+        });
+      });
+
+      const address = provider.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Fake chat provider did not bind to a TCP port");
+      }
+
+      process.env.LLM_PROVIDER = "openai-compatible";
+      process.env.LLM_BASE_URL = `http://127.0.0.1:${address.port}/v1/`;
+      process.env.LLM_API_KEY = testApiKey;
+      process.env.LLM_MODEL = "synthetic-test-model";
+
+      const auditStart = auditDocuments.length;
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+          cookie: sessionCookie(memberId),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Find today's order." }],
+        }),
+      });
+
+      const body = await response.json() as {
+        reply: string;
+        toolCalls: Array<{
+          server: string;
+          tool: string;
+          ok: boolean;
+          durationMs: number;
+        }>;
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.reply).toBe("The test tool found the requested result.");
+      expect(body.toolCalls).toHaveLength(1);
+      expect(body.toolCalls[0]).toMatchObject({
+        server: "testchat",
+        tool: "echo",
+        ok: true,
+      });
+      expect(body.toolCalls[0]?.durationMs).toEqual(expect.any(Number));
+
+      // The provider receives only enabled, connected tools.
+      expect(providerRequests).toHaveLength(2);
+      expect(providerErrors).toHaveLength(0);
+      expect(providerRequests.map((item) => item.path)).toEqual([
+        "/v1/chat/completions",
+        "/v1/chat/completions",
+      ]);
+      expect(providerRequests.every(
+        (item) => item.authorization === `Bearer ${testApiKey}`,
+      )).toBe(true);
+
+      const exposedNames = providerRequests[0]?.payload.tools?.map(
+        (tool) => tool.function?.name,
+      );
+      expect(exposedNames).toContain("testchat__echo");
+      expect(exposedNames).not.toContain("disabledchat__echo");
+      expect(exposedNames).not.toContain("offlinechat__echo");
+
+      // The response includes summaries, not tool arguments or raw results.
+      const publicResponse = JSON.stringify(body);
+      expect(publicResponse).not.toContain("test result");
+      expect(publicResponse).not.toContain('"message":"hello"');
+
+      // This assertion exercises the actual GatewayAggregator and audit writer.
+      const newAuditRows = auditDocuments.slice(auditStart);
+      expect(newAuditRows).toHaveLength(1);
+      expect(newAuditRows[0]?.source).toBe("chat");
+      expect(newAuditRows[0]?.userId.equals(memberId)).toBe(true);
+      expect(newAuditRows[0]?.userEmail).toBe("member@example.com");
+      expect(newAuditRows[0]?.serverSlug).toBe("testchat");
+      expect(newAuditRows[0]?.toolName).toBe("echo");
+      expect(newAuditRows[0]?.outcome).toBe("success");
+    } finally {
+      for (const [name, value] of Object.entries(envSnapshot)) {
+        if (value === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = value;
+        }
+      }
+
+      failingDiscoverySlug = originalFailingDiscoverySlug;
+      serverDocuments.splice(originalServerLength);
+      for (const state of originalServerStates) {
+        state.document.enabled = state.enabled;
+        state.document.status = state.status;
+      }
+
+      if (provider.listening) {
+        await new Promise<void>((resolve, reject) => {
+          provider.close((error) => error ? reject(error) : resolve());
+        });
+      }
+    }
+  });
+
+  it("rejects a client-supplied identity instead of allowing user spoofing", async () => {
+    const auditStart = auditDocuments.length;
+
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        cookie: sessionCookie(memberId),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Show my orders." }],
+        userId: adminId.toHexString(),
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "invalid_chat_request" },
+    });
+    expect(auditDocuments).toHaveLength(auditStart);
+  });
+
+  it("rejects chat requests without an authenticated session", async () => {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "Show my orders." }],
+      }),
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "unauthenticated" },
+    });
   });
 });

@@ -5,10 +5,10 @@ import userEvent from "@testing-library/user-event";
 import {
   AcceptInvitePage,
   AuditPage,
-  ChatPage,
   KeysPage,
   MembersPage,
 } from "../ManagementPages";
+import { ChatPage } from "../chat/ChatPage";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return {
@@ -60,14 +60,77 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("chat integration point", () => {
-  it("clearly marks the chat agent as planned for T07", () => {
-    render(<ChatPage />);
+describe("chat interface", () => {
+  it("sends chat history and displays the reply and tool-call summaries", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === "/api/chat") {
+        return jsonResponse({
+          reply: "Found two open orders.\n<img src=x onerror=alert(1)>",
+          toolCalls: [
+            {
+              server: "woocommerce",
+              tool: "list_orders",
+              ok: true,
+              durationMs: 37,
+            },
+          ],
+        });
+      }
+      return jsonResponse({}, 404);
+    });
 
-    expect(screen.getByRole("heading", { name: "Chat with your tools" }))
+    const { container } = render(<ChatPage />);
+    await user.type(
+      screen.getByRole("textbox", { name: "Message" }),
+      "Find today's open orders",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText(/Found two open orders\./)).toBeInTheDocument();
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("woocommerce")).toBeInTheDocument();
+    expect(screen.getByText("list_orders")).toBeInTheDocument();
+    expect(screen.getByText("Succeeded · 37 ms")).toBeInTheDocument();
+
+    const apiCall = fetchMock.mock.calls.find(
+      ([input]) => String(input) === "/api/chat",
+    );
+    expect(apiCall).toBeDefined();
+    expect(apiCall?.[1]?.method).toBe("POST");
+    expect(apiCall?.[1]?.credentials).toBe("same-origin");
+    expect(apiCall?.[1]?.cache).toBe("no-store");
+    expect(new Headers(apiCall?.[1]?.headers).get("Content-Type"))
+      .toBe("application/json");
+    expect(JSON.parse(String(apiCall?.[1]?.body))).toEqual({
+      messages: [
+        { role: "user", content: "Find today's open orders" },
+      ],
+    });
+  });
+
+  it("shows a clear message when the LLM provider is not configured", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        error: {
+          code: "chat_not_configured",
+          message: "Chat is not configured. Contact an administrator.",
+        },
+      }, 503),
+    );
+
+    render(<ChatPage />);
+    await user.type(
+      screen.getByRole("textbox", { name: "Message" }),
+      "Show today's orders",
+    );
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent(/Ask your gateway administrator to configure the LLM provider/i);
+    expect(screen.getByRole("button", { name: "Retry last message" }))
       .toBeInTheDocument();
-    expect(screen.getByText("Coming in T07")).toBeInTheDocument();
-    expect(screen.getByText(/will be connected in T07/i)).toBeInTheDocument();
   });
 });
 

@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
-import { AcceptInvitePage, AuditPage, ChatPage, KeysPage, MembersPage } from "./ManagementPages";
+import { AcceptInvitePage, AuditPage, KeysPage, MembersPage } from "./ManagementPages";
+import { ChatPage } from "./chat/ChatPage";
 
 
 type Role = "admin" | "member";

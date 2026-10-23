@@ -6,3 +6,23 @@ ingress:
   className: traefik
 gateway:
   cookieSecure: false
+  image:
+    tag: t07-hybrid-20261023-1
+  llm:
+    provider: openai-compatible
+    baseUrl: https://generativelanguage.googleapis.com/v1beta/openai/
+    model: gemini-3.8-flash
+    models:
+      - gemini-3.8-flash
+      - gemini-3.5-flash-lite
+
+# Preserve image versions already running in the local cluster.
+dashboard:
+  image:
+    tag: t07-chat-20261022-1
+mcpNotes:
+  image:
+    tag: t05-20261020-1
+mcpTime:
+  image:
+    tag: t05-20261020-1

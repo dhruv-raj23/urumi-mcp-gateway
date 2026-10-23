@@ -2,7 +2,7 @@
 Format: `- [ ] (Txx) question — proposed default — status`
 
 - [x] (T01) WooCommerce REST key auth over plain HTTP inside the cluster — resolved using option (b): send `X-Forwarded-Proto: https`; WordPress maps it to HTTPS for WooCommerce authentication. Verified with an in-cluster request to `/wp-json/wc/v3/products`: HTTP 200, response `[]`. See ADR-0003. The connection remains HTTP, so only trusted callers may reach the WordPress Service; network restrictions are still required.
-- [ ] (T07) Which free LLM provider/model supports tool calling reliably (Gemini OpenAI-compat, Groq, Ollama)? Default: Gemini via OpenAI-compatible endpoint.
+- [x] (T07) LLM provider/model — resolved 22 Oct 2026 via ADR-0015: Gemini OpenAI-compatible Chat Completions, model `gemini-3.8-flash`, base URL `https://generativelanguage.googleapis.com/v1beta/openai/`. Verify account quotas in AI Studio before live use.
 - [x] (T01) WordPress database name and application DB username — decision: database `wordpress`, user `wordpress`, password from `urumi-mariadb` key `MARIADB_PASSWORD` — resolved by ADR-0008.
 - [x] (T01) WooCommerce store currency — decision: `INR` — resolved by ADR-0008.
 - [x] (T01) WordPress internal Apache container port — decision: Apache listens on unprivileged port `8080`, named `http`; Service port remains `80` with `targetPort: http`, and Ingress routes to Service port `80`. Probes target the container port using `/wp-login.php` or TCP as appropriate — resolved by ADR-0008.
@@ -63,3 +63,8 @@ Format: `- [ ] (Txx) question — proposed default — status`
 - [x] **Resolved 21 Oct 2026 via ADR-0014:** strict `{ "status": "disabled" }` request; HTTP 200 public-user response; admin-only; only member accounts can be disabled; active and invited members may transition to disabled; invited tokens are cleared; repeat requests for already-disabled members are idempotent; no reactivation through this endpoint.
 - **Implementation:** tracked in `docs/tasks/T06A-member-disable-endpoint.md`.
 - **T06 impact:** member disablement remains incomplete until the backend route and tests pass and the dashboard workflow is verified in the browser.
+
+## T07 scope — chat route and dashboard integration
+
+- [x] **Resolved 22 Oct 2026 by owner approval:** `apps/gateway/src/http/app.ts` and `apps/dashboard/src/main.tsx` may be changed for wiring only. Chat logic stays under `apps/gateway/src/chat/` and `apps/dashboard/src/chat/`; tests stay under `apps/gateway/tests/` and `apps/dashboard/src/__tests__/`. No dependencies may be added.
+- [x] **T07 provider resolved 22 Oct 2026 via ADR-0015:** initial provider is Gemini through the OpenAI-compatible Chat Completions endpoint; active quotas must be checked in AI Studio.

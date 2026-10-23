@@ -64,7 +64,7 @@ gateway:
   existingSecret: urumi-gateway
   mongoSecret: urumi-mongo
   cookieSecure: false
-  llm: { provider: openai-compatible, baseUrl: "", model: "" }   # key is in Secret urumi-gateway
+  llm: { provider: openai-compatible, baseUrl: "", model: "", models: [] }   # key is in Secret urumi-gateway
   timeouts: { listMs: 5000, callMs: 30000, healthIntervalMs: 15000 }
   resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 384Mi } }
 
