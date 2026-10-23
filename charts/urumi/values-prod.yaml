@@ -1,11 +1,153 @@
-# Production-like VPS (k3s). Only non-secret deployment differences live here.
+# Production-like VPS (k3s).
+# Replace CHANGE_ME_DOMAIN before deploying.
+# Publish all custom GHCR images under these repositories and tags first.
+# Custom images must be publicly pullable with the chart as currently written.
+# Never put secrets in this file.
+
 global:
-  domain: CHANGE_ME_DOMAIN        # e.g. example.com -> store.example.com, app.example.com
-  imageRegistry: CHANGE_ME_REGISTRY  # e.g. ghcr.io/<user>
-  storageClass: local-path        # k3s default; change for cloud (e.g. gp3, standard-rwo)
+  domain: CHANGE_ME_DOMAIN
+  storageClass: local-path
+
 ingress:
   className: traefik
-  tls: { enabled: true, clusterIssuer: letsencrypt-prod }
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+
+networkPolicy:
+  enabled: true
+
 gateway:
-  cookieSecure: true
   replicas: 1
+  cookieSecure: true
+  image:
+    repository: ghcr.io/dhruv-raj23/urumi-gateway
+    tag: t07-hybrid-20261023-1
+    pullPolicy: IfNotPresent
+  llm:
+    provider: openai-compatible
+    baseUrl: https://generativelanguage.googleapis.com/v1beta/openai/
+    model: gemini-3.8-flash
+    models:
+      - gemini-3.8-flash
+      - gemini-3.5-flash-lite
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+
+dashboard:
+  replicas: 1
+  image:
+    repository: ghcr.io/dhruv-raj23/urumi-dashboard
+    tag: t07-chat-20261022-1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 150m
+      memory: 96Mi
+
+wooMcp:
+  replicas: 1
+  image:
+    repository: ghcr.io/dhruv-raj23/urumi-woo-mcp
+    tag: t08-20261023-1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 192Mi
+
+mcpTime:
+  replicas: 1
+  image:
+    repository: ghcr.io/dhruv-raj23/urumi-mcp-time
+    tag: t05-20261020-1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 25m
+      memory: 48Mi
+    limits:
+      cpu: 150m
+      memory: 128Mi
+
+mcpNotes:
+  replicas: 1
+  image:
+    repository: ghcr.io/dhruv-raj23/urumi-mcp-notes
+    tag: t05-20261020-1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 25m
+      memory: 48Mi
+    limits:
+      cpu: 150m
+      memory: 128Mi
+
+wordpress:
+  replicas: 1
+  image:
+    repository: wordpress
+    tag: "7-apache"
+    pullPolicy: IfNotPresent
+  cliImage:
+    repository: wordpress
+    tag: "cli-php8.3"
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 768Mi
+
+mariadb:
+  replicas: 1
+  image:
+    repository: mariadb
+    tag: "11"
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+mongo:
+  image:
+    repository: mongo
+    tag: "7"
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
