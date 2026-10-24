@@ -16,7 +16,7 @@ build: ## build all docker images as urumi/<app>:dev
 load: ## import images into k3d
 	@for a in $(APPS); do k3d image import urumi/$$a:dev -c urumi || exit 1; done
 deploy: ## helm upgrade --install (local values)
-	helm upgrade --install urumi charts/urumi -n $(NS) --create-namespace -f charts/urumi/values-local.yaml
+	helm upgrade --install urumi charts/urumi -n $(NS) --create-namespace -f charts/urumi/values-local.yaml --set-string gateway.image.tag=dev --set-string wooMcp.image.tag=dev --set-string mcpTime.image.tag=dev --set-string mcpNotes.image.tag=dev --set-string dashboard.image.tag=dev
 undeploy: ## helm uninstall
 	helm uninstall urumi -n $(NS)
 typecheck: ## tsc --noEmit in every app (run npm install first)

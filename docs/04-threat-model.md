@@ -1,32 +1,107 @@
-# 04 — Threat model (SKELETON — complete in T10; keep updating as you build)
-Required topics from the brief. Write real answers, in your own words, based on what the code actually does.
+# 04 — Threat model
 
-## 1. Shared upstream credentials: what can a member do with a credential they never see?
-TODO: A member can invoke any tool the gateway exposes using the shared credential's authority. Describe blast radius,
-what limits it (role/tool permissions if implemented, audit, rate limits), and what is NOT limited.
+This document describes the current implementation and its remaining risks.
 
-## 2. Why client tokens are not passed through to upstream servers
-TODO: confused-deputy / token passthrough; upstream cannot validate audience; credential isolation; revocation semantics.
+## 1. Shared upstream credentials
 
-## 3. Untrusted upstreams: tool descriptions/results written to manipulate the model
-TODO: prompt injection via descriptions and results; mitigations implemented (origin prefix, no auto-privileged tools,
-results treated as data, iteration cap, audit). Residual risk.
+A member's API key authenticates the member to the gateway. The gateway
+stores upstream credentials separately, encrypts them in MongoDB, and uses
+them when making upstream calls. The client does not need to see those
+credentials.
 
-## 4. What can one team member do to another?
-TODO: keys are per-user; members cannot see others' keys/audit; shared server state (admin only); chat history isolation;
-what a malicious member CAN do (use shared tools).
+Hiding a credential does not remove its authority. A member can invoke any
+tool exposed by an enabled, reachable upstream. For WooCommerce, that
+includes listing products and orders, creating products, retrieving orders,
+and updating order status. A compromised member account can misuse the
+shared tool authority within that exposed surface.
 
-**Known limitation — stateless browser sessions:** A copied signed session
-cookie can remain valid until its eight-hour expiry after browser logout if
-the associated user remains active. Every authenticated request rechecks the
-user's existence and active status, so disabling the account blocks subsequent
-requests. Immediate per-session revocation is not implemented; see ADR-0009.
-## 5. Malicious/compromised upstream added by an admin (demo requirement)
-TODO: SSRF via URL (cluster-internal / metadata addresses), credential exfil to attacker server, huge responses, slow responses.
-Mitigations implemented vs. not.
+Implemented controls include per-user API keys, key revocation, user-aware
+audit records, admin-only server management, encrypted upstream credentials,
+internal-only upstream Services, NetworkPolicies, and bounded upstream
+timeouts. Fine-grained per-role/per-tool authorization and comprehensive
+per-user rate limiting are not implemented. Audit logs help investigation
+but do not prevent misuse.
 
-## Known gap — SSRF filtering for registered server URLs
+## 2. Why client tokens are not passed upstream
 
-T03 validates that upstream URLs use HTTP or HTTPS, rejects embedded URL user-info, and restricts configuration writes to admins, but it does not block cluster-internal IPs, loopback, link-local/cloud metadata destinations, or other sensitive networks. Cluster-internal hosts are currently allowed because the required MCP servers run inside the cluster. Treat URL destination filtering as a later hardening/stretch item, not as an implemented protection. Before exposing server registration to less-trusted administrators, add an SSRF defense and enforce network-level egress restrictions. See ADR-0012.
+The client API key identifies a user to this gateway. An upstream credential
+identifies the gateway/service to an upstream. They represent different
+trust boundaries and are not interchangeable.
 
-- Chat history stays in browser memory and is sent with each chat request; the gateway does not persist conversation history or log chat message bodies.
+The gateway validates the client key, retrieves the configured upstream
+credential, and sends the upstream's expected authorization header. It does
+not forward the client's bearer token as upstream authentication. Revoking
+a client key blocks subsequent requests made with that key; it is separate
+from rotating an upstream credential.
+
+This separation limits accidental credential propagation, but a compromised
+gateway could still access the upstream credentials it needs to operate.
+
+## 3. Untrusted upstream descriptions and results
+
+A malicious upstream can return tool descriptions or results containing
+prompt-injection instructions. Tool descriptions are prefixed with the
+upstream slug to communicate their origin. The chat tool loop is capped at
+eight iterations, and calls use the same user-attributed gateway path.
+
+These measures are not a complete prompt-injection defense. A model may
+still be influenced by malicious text and choose an action available through
+the exposed tool set. Prefixing a description indicates provenance; it does
+not sanitize the description or make its contents trustworthy. Fine-grained
+tool permissions are not implemented.
+
+Review upstream ownership, code, tool definitions and returned data before
+trusting a new server. Limit credential authority and monitor audit events.
+
+## 4. What one team member can do to another
+
+API keys belong to individual users. Members manage their own keys and are
+scoped to their own audit entries; administrators have broader user, server,
+key and audit visibility. Disabling a member blocks subsequent authenticated
+requests. Chat history remains in browser memory and is sent with chat
+requests; the gateway does not persist chat transcripts or log full chat
+message bodies.
+
+The principal shared risk is tool authority: members can invoke the tools
+enabled for the gateway. Audit logging provides attribution but does not
+replace server-side authorization or rate limiting.
+
+Browser sessions use stateless signed cookies with an eight-hour expiry.
+A copied cookie may remain valid until expiry after logout while its user
+remains active. Disabling that account blocks subsequent requests, but
+immediate individual session revocation is not implemented; see ADR-0009.
+
+## 5. Malicious or compromised upstream registered by an admin
+
+Server registration is restricted to administrators. URL validation requires
+HTTP(S) and rejects embedded URL user-info. Upstream credentials are stored
+encrypted and are not returned by server-management APIs. Discovery and
+calls use timeouts; an unavailable upstream can be reported without
+necessarily taking down independent upstreams.
+
+**SSRF destination filtering is not comprehensively implemented.** The
+gateway does not comprehensively block loopback, cluster-internal, private,
+link-local or cloud-metadata destinations. Internal hosts are allowed for
+the first-party MCP services. An admin who registers an attacker-controlled
+endpoint may cause the gateway to send its configured credential there.
+Reachable internal destinations may also create SSRF risk.
+
+NetworkPolicies reduce allowed traffic paths but do not eliminate this
+risk. Current policies allow broad TCP 443 egress for required external
+services, so they are not a complete SSRF or egress defense.
+
+Before arbitrary upstream URLs are trusted, implement and test destination
+allowlisting, private/link-local/metadata address blocking, redirect and DNS
+revalidation, and restrictive egress rules. These are future hardening tasks,
+not implemented protections. See ADR-0012.
+
+## 6. Operational risks
+
+- Revoke any exposed API key immediately; never show full keys, passwords or
+  credential-bearing URLs in source control, logs or video.
+- Rotating the credential-encryption key requires a plan for existing
+  ciphertext; otherwise stored upstream credentials may become unreadable.
+- Persistent volumes are not backups. Test restore procedures for MongoDB,
+  MariaDB and WordPress content.
+- Local k3d acceptance does not prove public image availability, production
+  DNS/TLS, or a successful VPS deployment.

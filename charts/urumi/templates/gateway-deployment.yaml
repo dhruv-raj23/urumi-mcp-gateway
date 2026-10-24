@@ -56,6 +56,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.gateway.mongoSecret }}
                   key: MONGO_URI
+            - name: WOO_MCP_URL
+              value: "http://woo-mcp.{{ .Release.Namespace }}.svc.cluster.local:3001/mcp"
+            - name: WOO_MCP_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.wooMcp.existingSecret }}
+                  key: UPSTREAM_AUTH_TOKEN
             - name: CREDENTIAL_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:

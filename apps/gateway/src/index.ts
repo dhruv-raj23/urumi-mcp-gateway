@@ -1,4 +1,5 @@
 import { ensureBootstrapAdmin } from "./auth/bootstrap.js";
+import { ensureDefaultWooServer } from "./db/defaultServers.js";
 import { connectGatewayDatabase } from "./db/mongo.js";
 import { createGatewayServer } from "./http/app.js";
 
@@ -27,6 +28,7 @@ async function main(): Promise<void> {
   try {
     // Creates the initial admin only when the users collection is empty.
     await ensureBootstrapAdmin(database.collections.users);
+    await ensureDefaultWooServer(database.collections.servers);
 
     const server = createGatewayServer(database.collections, {
       sessionSecret,
