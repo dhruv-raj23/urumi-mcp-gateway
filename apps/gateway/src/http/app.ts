@@ -10,6 +10,7 @@ import { ObjectId } from "mongodb";
 import { z } from "zod";
 
 import { encryptCredential } from "../crypto/credentials.js";
+import { assertAllowedServerDestination, isAllowedServerUrl } from "../security/ssrf.js";
 
 import {
   createUserApiKey,
@@ -86,16 +87,6 @@ const FORBIDDEN_CUSTOM_HEADERS = new Set([
   "transfer-encoding",
 ]);
 
-function isAllowedServerUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-      parsed.username.length === 0 && parsed.password.length === 0;
-  } catch {
-    return false;
-  }
-}
-
 function isAllowedHeaderName(value: string): boolean {
   return HTTP_TOKEN_PATTERN.test(value) &&
     !FORBIDDEN_CUSTOM_HEADERS.has(value.toLowerCase());
@@ -124,6 +115,16 @@ const createServerSchema = z.object({
   credential: serverCredentialSchema.optional(),
   enabled: z.boolean().optional(),
 }).strict().superRefine((data, context) => {
+  try {
+    assertAllowedServerDestination(data.url, data.slug);
+  } catch {
+    context.addIssue({
+      code: "custom",
+      path: ["url"],
+      message: "Server URL destination is not permitted",
+    });
+  }
+
   if (data.authType === "none") {
     if (data.credential !== undefined) {
       context.addIssue({ code: "custom", path: ["credential"], message: "authType none does not accept a credential" });
@@ -823,6 +824,21 @@ async function handleRequest(
     }
 
     const input = parsed.data;
+
+    if (input.url !== undefined) {
+      try {
+        assertAllowedServerDestination(input.url, existing.slug);
+      } catch {
+        sendError(
+          response,
+          400,
+          "invalid_server_url",
+          "Server URL destination is not permitted",
+        );
+        return;
+      }
+    }
+
     const authType = input.authType ?? existing.authType;
     const credentialProvided = input.credential !== undefined;
     const headerNameProvided = input.headerName !== undefined;

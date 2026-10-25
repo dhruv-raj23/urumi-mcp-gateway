@@ -52,6 +52,12 @@ for filename in files:
                 continue
 
             checked_workloads.add(f"{kind}/{name}")
+
+            if pod_spec.get("automountServiceAccountToken") is not False:
+                bad.append(
+                    f"{workload}: automountServiceAccountToken must be false"
+                )
+
             pod_security = pod_spec.get("securityContext", {})
 
             for field in ("containers", "initContainers"):

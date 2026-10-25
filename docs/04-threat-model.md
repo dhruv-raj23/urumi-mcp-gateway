@@ -78,27 +78,45 @@ immediate individual session revocation is not implemented; see ADR-0009.
 
 ## 5. Malicious or compromised upstream registered by an admin
 
-Server registration is restricted to administrators. URL validation requires
-HTTP(S) and rejects embedded URL user-info. Upstream credentials are stored
-encrypted and are not returned by server-management APIs. Discovery and
-calls use timeouts; an unavailable upstream can be reported without
-necessarily taking down independent upstreams.
+Server registration is restricted to administrators. URL validation rejects
+unsupported schemes and embedded URL user-info. External upstreams must use
+HTTPS on the default port and a public-looking hostname or public-unicast IP.
+Loopback, private, link-local, metadata and other blocked destination classes
+are rejected by the destination validator.
 
-**SSRF destination filtering is not comprehensively implemented.** The
-gateway does not comprehensively block loopback, cluster-internal, private,
-link-local or cloud-metadata destinations. Internal hosts are allowed for
-the first-party MCP services. An admin who registers an attacker-controlled
-endpoint may cause the gateway to send its configured credential there.
-Reachable internal destinations may also create SSRF risk.
+The first-party MCP services are a narrow exception: an upstream must match
+its expected slug, fully qualified Kubernetes Service hostname, port and
+`/mcp` path. Arbitrary internal hostnames are not trusted as first-party
+services.
 
-NetworkPolicies reduce allowed traffic paths but do not eliminate this
-risk. Current policies allow broad TCP 443 egress for required external
-services, so they are not a complete SSRF or egress defense.
+For external hostnames, DNS addresses are validated when the connection is
+made. Unsafe answers, including a response containing a mixture of public and
+private addresses, are rejected. The connection uses the validated addresses
+rather than performing an unchecked second lookup. The safe-fetch path checks
+that the requested destination matches the configured upstream and disables
+automatic redirect following. These controls reduce DNS-rebinding and
+redirect-based SSRF paths; they do not establish that a public server is
+trustworthy.
 
-Before arbitrary upstream URLs are trusted, implement and test destination
-allowlisting, private/link-local/metadata address blocking, redirect and DNS
-revalidation, and restrictive egress rules. These are future hardening tasks,
-not implemented protections. See ADR-0012.
+Upstream credentials are stored encrypted and are not returned by
+server-management APIs. A malicious public endpoint registered by an
+administrator could still receive the gateway's configured upstream
+credential. Review upstream ownership, code, tool definitions, returned data
+and credential scope before trusting a new server.
+
+NetworkPolicies provide an additional traffic boundary. Broad outbound TCP
+443 rules now exclude multiple IPv4 private, loopback, link-local, shared,
+documentation, benchmarking and reserved ranges. These rules are not a
+hostname allowlist, do not replace application-layer destination validation,
+and are not a complete egress defense. The exclusions are IPv4-specific;
+IPv6 behavior and enforcement depend on the cluster networking configuration.
+
+The `feat/ssrf-hardening` branch passed the recorded SSRF tests and chart
+checks. These are branch-level results, not live deployment acceptance. The
+running local Helm release has intentionally not been updated with these
+changes. After a reviewed rollout, verify pod health and repeat allowed and
+blocked destination tests in the actual cluster before claiming the combined
+controls are runtime-verified. See ADR-0012.
 
 ## 6. Operational risks
 

@@ -1,6 +1,7 @@
 import { ObjectId, type Collection } from "mongodb";
 
 import { encryptCredential } from "../crypto/credentials.js";
+import { assertAllowedServerDestination } from "../security/ssrf.js";
 import type { ServerDocument } from "./models.js";
 
 export interface DefaultWooServerOptions {
@@ -53,6 +54,12 @@ export async function ensureDefaultWooServer(
     parsedUrl.password !== ""
   ) {
     throw new Error("WOO_MCP_URL must be HTTP(S) without embedded credentials");
+  }
+
+  try {
+    assertAllowedServerDestination(url, "woo");
+  } catch {
+    throw new Error("WOO_MCP_URL destination is not permitted");
   }
 
   const document: ServerDocument = {

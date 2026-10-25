@@ -239,3 +239,24 @@ Executed on the local k3d cluster on October 23, 2026.
 - All 14 NetworkPolicies remained installed.
 - Production values were rendered and passed `helm lint`; this did not
   constitute a production VPS deployment.
+
+## 10. Outbound destination security status
+
+The gateway validates registered upstream destinations and checks resolved
+addresses when opening outbound connections. External upstreams must use
+HTTPS on the default port; first-party in-cluster MCP services are permitted
+only through their expected service identities and paths. Automatic redirect
+following is disabled for upstream requests.
+
+The chart also restricts outbound TCP 443 using IPv4 address exclusions.
+This is defense-in-depth only: it is not a hostname-specific egress allowlist,
+and it does not by itself prove that all IPv4 or IPv6 destinations are safe.
+Review the effective policy and its enforcement in the target cluster and
+network plugin before production use.
+
+The `feat/ssrf-hardening` changes have passed branch-level tests and chart
+validation, but these results are not a production deployment or a live
+network-policy acceptance test. Before deployment, rerun the repository
+checks, review the rendered production NetworkPolicies, and perform explicit
+allowed/blocked destination tests in the target environment. Keep upstream
+credentials least-privileged and register only reviewed endpoints.

@@ -24,6 +24,7 @@ import {
 } from "./toolNaming.js";
 import { isToolAllowedForRole } from "./toolPermissions.js";
 import { GatewayToolMetrics } from "../observability/toolMetrics.js";
+import { createSafeUpstreamFetch } from "../security/ssrf.js";
 
 const DEFAULT_LIST_TIMEOUT_MS = 5_000;
 const DEFAULT_CALL_TIMEOUT_MS = 30_000;
@@ -148,12 +149,18 @@ async function createSdkUpstreamClient(
 ): Promise<UpstreamMcpClient> {
   let transport: StreamableHTTPClientTransport | undefined;
   let client: Client | undefined;
+  let safeUpstream: ReturnType<typeof createSafeUpstreamFetch> | undefined;
 
   try {
+    const securedUpstream = createSafeUpstreamFetch(server.url, server.slug);
+    safeUpstream = securedUpstream;
+
     transport = new StreamableHTTPClientTransport(new URL(server.url), {
       requestInit: {
         headers: upstreamHeaders(server, encryptionKey),
       },
+      fetch: securedUpstream.fetch,
+      redirectPolicy: "same-origin",
     });
 
     client = new Client(
@@ -206,7 +213,11 @@ async function createSdkUpstreamClient(
       },
 
       close: async () => {
-        await connectedClient.close();
+        try {
+          await connectedClient.close();
+        } finally {
+          await securedUpstream.close();
+        }
       },
     };
   } catch {
@@ -215,6 +226,7 @@ async function createSdkUpstreamClient(
     } else if (transport) {
       await transport.close().catch(() => undefined);
     }
+    await safeUpstream?.close().catch(() => undefined);
 
     // Keep URLs, credentials and driver errors out of public responses.
     throw new Error("Upstream connection failed");
