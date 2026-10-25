@@ -44,8 +44,10 @@ requirement-by-requirement evidence and remaining acceptance work.
 - [x] Added internal GET /metrics and HTTP tests for text output and method rejection.
 - [x] Focused tests passed: 84; gateway TypeScript typecheck passed.
 - [x] Full make check passed with 198 automated tests and repository checks.
-- [ ] Build and deploy the observability gateway image in k3d.
-- [ ] Verify live metrics change after actual tool calls.
+- [x] Deployed `urumi/gateway:observability-20261025-1` at Helm revision 41.
+- [x] Live `GET /healthz` and `GET /metrics` checks passed.
+- [x] A successful time tool call incremented the success counter; a denied
+      member WooCommerce write call incremented the denied counter.
 - [ ] Prometheus scraping is not configured; metrics reset on restart and
       are not aggregated across replicas.
 

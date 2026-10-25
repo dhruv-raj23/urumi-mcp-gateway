@@ -38,7 +38,10 @@
       requests to /metrics.
 - [x] Focused tests passed: 84; full make check passed with 198 automated
       tests; gateway TypeScript typecheck passed.
-- [ ] Verify the observability image and metrics endpoint in the live cluster.
+- [x] Deployed urumi/gateway:observability-20261025-1 at Helm revision 41;
+      /healthz and /metrics returned HTTP 200 via port-forward.
+- [x] A live read-only time tool call incremented the success counter; a denied
+      member woo__create_product call incremented the denied counter.
 - [ ] Prometheus scraping remains unconfigured. Metrics are process-local,
       reset on restart and not aggregated across replicas.
 

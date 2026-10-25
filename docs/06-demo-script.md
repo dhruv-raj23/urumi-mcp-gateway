@@ -180,9 +180,11 @@ corresponding server/outcome counter changes. Verify that a denied member
 write call is counted as denied. Do not expose this endpoint through public
 Ingress.
 
-Live verification remains pending until deployment. Metrics are process-local,
-reset on restart and are not aggregated across replicas. Prometheus scraping
-is not configured.
+Live verification passed on k3d at Helm revision 41: /healthz and /metrics
+returned HTTP 200; a successful time__get_current_time call incremented the
+success counter, and a denied member WooCommerce write attempt incremented the
+denied counter. Metrics are process-local, reset on restart and are not
+aggregated across replicas. Prometheus scraping is not configured.
 
 ## 12. After recording
 

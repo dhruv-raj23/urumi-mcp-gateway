@@ -41,8 +41,9 @@ unchecked item still needs the evidence described below.
   cumulative latency histogram buckets, safe server labels and the HTTP route.
 - `make check` passed with 198 automated tests, plus repository, secret and
   chart-policy checks; gateway TypeScript typecheck passed.
-- Deployment and live-cluster verification of the new metrics endpoint remain
-  pending. Prometheus installation and scraping are not implemented.
+- Live verification passed on k3d at Helm revision 41. A successful time
+  tool call incremented the success counter, and a denied WooCommerce write
+  attempt incremented the denied counter. Prometheus scraping is not configured.
 
 ## Remaining acceptance evidence
 
