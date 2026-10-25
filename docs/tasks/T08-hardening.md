@@ -90,12 +90,13 @@ have run.
   connectivity probe. This verifies reachability, not a complete MCP call.
 - Positive control: the gateway connected to the WooCommerce pod endpoint
   over TCP.
-- Negative connection probe: a temporary test pod received only a scoped
-  egress allowance to WooCommerce on TCP 3001, but its connection returned
-  `ECONNREFUSED`. The WooCommerce ingress policy allows gateway-labelled pods
-  only. The refusal is an observed negative result, not conclusive proof that
-  CNI NetworkPolicy enforcement caused the failure; a CNI-aware enforcement
-  check remains outstanding.
+- Negative connection probe: a temporary test pod received scoped egress
+  permission to WooCommerce on TCP 3001 and received `ECONNREFUSED` connecting
+  directly to pod IP `10.42.0.118`. Current K3s firewall rules showed the
+  WooCommerce pod chain invoking `urumi-woo-mcp-ingress` and a `REJECT` rule
+  for traffic not marked as allowed. No before/after counter delta was captured
+  for this probe, so the outcome is strong supporting evidence of enforcement,
+  not conclusive rule-specific packet-drop evidence.
 - The temporary test pod and temporary egress policy were deleted.
 
 This acceptance evidence applies to the local k3d cluster and tested paths.

@@ -120,12 +120,15 @@ GET connectivity probe returned HTTP 405, which confirms an HTTP response but
 does not constitute a successful MCP operation.
 
 For the NetworkPolicy negative control, a temporary egress policy allowed
-only a test pod to connect to WooCommerce MCP. A positive control confirmed
-that the gateway could connect to the same endpoint; the non-gateway test
-pod received `ECONNREFUSED`. An immediate refusal does not uniquely
-prove a NetworkPolicy drop, so this is an observed negative connection result,
-not conclusive proof of CNI enforcement. A CNI-aware enforcement check remains
-outstanding. The temporary pod and policy were removed afterward.
+only a test pod to initiate TCP traffic to WooCommerce MCP on port 3001. The
+gateway had previously connected to the same endpoint; the non-gateway test
+pod received `ECONNREFUSED`. Current K3s firewall rules showed the WooCommerce
+pod's firewall chain invoking `urumi-woo-mcp-ingress` and a `REJECT` rule for
+traffic not marked as allowed. Firewall chain names are regenerated, so use
+the current rules rather than hard-coded chain identifiers. We did not capture
+a before/after counter delta tied to the probe. This is strong supporting
+evidence of policy enforcement, but not a conclusive rule-specific packet-drop
+measurement. The temporary pod and policy were removed afterward.
 
 All eight application pods were ready after the rollout, and the gateway had
 zero restarts in the latest observed pod listing. This is evidence from the

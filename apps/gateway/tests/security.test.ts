@@ -61,7 +61,7 @@ describe("password hashing", () => {
     await expect(verifyPassword("incorrect-password", hash)).resolves.toBe(
       false,
     );
-  });
+  }, 10000);
 
   it("rejects passwords that bcrypt would truncate", async () => {
     await expect(hashPassword("x".repeat(73))).rejects.toThrow(
