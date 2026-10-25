@@ -27,6 +27,19 @@ function namespace(): string {
   return process.env.KUBERNETES_NAMESPACE ?? "urumi";
 }
 
+/**
+ * Returns the canonical Kubernetes MCP endpoint for a built-in server.
+ * Keep this derived from the same definitions used by SSRF validation.
+ */
+export function canonicalInternalServerUrl(
+  slug: string,
+): string | undefined {
+  const service = INTERNAL_SERVICES.find((item) => item.slug === slug);
+  if (!service) return undefined;
+
+  return `http://${service.name}.${namespace()}.svc.cluster.local:${service.port}/mcp`;
+}
+
 function hostnameOf(url: URL): string {
   return url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
 }

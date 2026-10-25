@@ -27,7 +27,7 @@
 1. Client `POST /mcp` `tools/call name=woo__list_orders` with `Bearer urumi_…`.
 2. Gateway hashes key → finds active key → user. 3. Splits name → slug `woo`, tool `list_orders`.
 4. Loads server (enabled & connected), decrypts credential in memory. 5. Opens Streamable HTTP request to
-`http://woo-mcp:3001/mcp` with the **upstream** credential (never the client key), with timeout.
+`http://woo-mcp.urumi.svc.cluster.local:3001/mcp` with the **upstream** credential (never the client key), with timeout.
 6. woo-mcp calls WordPress REST, returns result. 7. Gateway writes audit row (user, server, tool, duration, outcome)
 and returns result (or `isError` result) to the client.
 
