@@ -78,27 +78,59 @@ immediate individual session revocation is not implemented; see ADR-0009.
 
 ## 5. Malicious or compromised upstream registered by an admin
 
-Server registration is restricted to administrators. URL validation requires
-HTTP(S) and rejects embedded URL user-info. Upstream credentials are stored
-encrypted and are not returned by server-management APIs. Discovery and
-calls use timeouts; an unavailable upstream can be reported without
-necessarily taking down independent upstreams.
+Server registration is restricted to administrators. URL validation rejects
+unsupported schemes and embedded URL user-info. External upstreams must use
+HTTPS on the default port and a public-looking hostname or public-unicast IP.
+Loopback, private, link-local, metadata and other blocked destination classes
+are rejected by the destination validator.
 
-**SSRF destination filtering is not comprehensively implemented.** The
-gateway does not comprehensively block loopback, cluster-internal, private,
-link-local or cloud-metadata destinations. Internal hosts are allowed for
-the first-party MCP services. An admin who registers an attacker-controlled
-endpoint may cause the gateway to send its configured credential there.
-Reachable internal destinations may also create SSRF risk.
+The first-party MCP services are a narrow exception: an upstream must match
+its expected slug, fully qualified Kubernetes Service hostname, port and
+`/mcp` path. Arbitrary internal hostnames are not trusted as first-party
+services.
 
-NetworkPolicies reduce allowed traffic paths but do not eliminate this
-risk. Current policies allow broad TCP 443 egress for required external
-services, so they are not a complete SSRF or egress defense.
+For external hostnames, DNS addresses are validated when the connection is
+made. Unsafe answers, including a response containing a mixture of public and
+private addresses, are rejected. The connection uses the validated addresses
+rather than performing an unchecked second lookup. The safe-fetch path checks
+that the requested destination matches the configured upstream and disables
+automatic redirect following. These controls reduce DNS-rebinding and
+redirect-based SSRF paths; they do not establish that a public server is
+trustworthy.
 
-Before arbitrary upstream URLs are trusted, implement and test destination
-allowlisting, private/link-local/metadata address blocking, redirect and DNS
-revalidation, and restrictive egress rules. These are future hardening tasks,
-not implemented protections. See ADR-0012.
+Upstream credentials are stored encrypted and are not returned by
+server-management APIs. A malicious public endpoint registered by an
+administrator could still receive the gateway's configured upstream
+credential. Review upstream ownership, code, tool definitions, returned data
+and credential scope before trusting a new server.
+
+NetworkPolicies provide an additional traffic boundary. Broad outbound TCP
+443 rules now exclude multiple IPv4 private, loopback, link-local, shared,
+documentation, benchmarking and reserved ranges. These rules are not a
+hostname allowlist, do not replace application-layer destination validation,
+and are not a complete egress defense. The exclusions are IPv4-specific;
+IPv6 behavior and enforcement depend on the cluster networking configuration.
+
+The `feat/ssrf-hardening` branch was deployed to the local k3d cluster
+in Helm revision 43 using gateway image `urumi/gateway:ssrf-eede0dd`.
+
+Runtime checks confirmed that the trusted WooCommerce URL is accepted, unsafe
+test destinations are rejected, and safe-fetch reached WooCommerce MCP. The
+GET connectivity probe returned HTTP 405, which confirms an HTTP response but
+does not constitute a successful MCP operation.
+
+For the NetworkPolicy negative control, a temporary egress policy allowed
+only a test pod to connect to WooCommerce MCP. A positive control confirmed
+that the gateway could connect to the same endpoint; the non-gateway test
+pod received `ECONNREFUSED`. An immediate refusal does not uniquely
+prove a NetworkPolicy drop, so this is an observed negative connection result,
+not conclusive proof of CNI enforcement. A CNI-aware enforcement check remains
+outstanding. The temporary pod and policy were removed afterward.
+
+All eight application pods were ready after the rollout, and the gateway had
+zero restarts in the latest observed pod listing. This is evidence from the
+tested local k3d cluster, not a production deployment or proof of complete
+IPv4/IPv6 egress enforcement. See ADR-0012.
 
 ## 6. Operational risks
 

@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/name: gateway
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 15
       securityContext:
         runAsNonRoot: true
@@ -45,6 +46,8 @@ spec:
           env:
             - name: NODE_ENV
               value: production
+            - name: KUBERNETES_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
             - name: PORT
               value: "3000"
             - name: HOME

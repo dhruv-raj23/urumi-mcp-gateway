@@ -919,7 +919,7 @@ describe("gateway authentication HTTP routes", () => {
       body: JSON.stringify({
         slug: "member-server",
         name: "Member server",
-        url: "http://woo-mcp:3001/mcp",
+        url: "https://example.com/mcp",
         authType: "none",
       }),
     });
@@ -936,7 +936,7 @@ describe("gateway authentication HTTP routes", () => {
       body: JSON.stringify({
         slug: "bearer-missing",
         name: "Missing bearer credential",
-        url: "http://woo-mcp:3001/mcp",
+        url: "https://example.com/mcp",
         authType: "bearer",
       }),
     });
@@ -946,7 +946,7 @@ describe("gateway authentication HTTP routes", () => {
   it("rejects invalid URL user-info, reserved headers, and CR/LF credentials", async () => {
     const base = {
       name: "Validation test",
-      url: "http://woo-mcp:3001/mcp",
+      url: "https://example.com/mcp",
       authType: "header",
       credential: "header-credential-test",
       headerName: "X-Upstream-Token",
@@ -981,7 +981,7 @@ describe("gateway authentication HTTP routes", () => {
       body: JSON.stringify({
         slug: "credential-server",
         name: "Credential server",
-        url: "http://woo-mcp:3001/mcp",
+        url: "https://example.com/mcp",
         authType: "bearer",
         credential,
       }),
@@ -1019,7 +1019,7 @@ describe("gateway authentication HTTP routes", () => {
       body: JSON.stringify({
         slug: "duplicate-server",
         name: "Duplicate test",
-        url: "http://woo-mcp:3001/mcp",
+        url: "https://example.com/mcp",
         authType: "none",
       }),
     });
@@ -1034,7 +1034,7 @@ describe("gateway authentication HTTP routes", () => {
       body: JSON.stringify({
         slug: "immutable-server",
         name: "Immutable test",
-        url: "http://woo-mcp:3001/mcp",
+        url: "https://example.com/mcp",
         authType: "none",
       }),
     });
@@ -1068,7 +1068,7 @@ describe("gateway authentication HTTP routes", () => {
       body: JSON.stringify({
         slug: "clear-credential",
         name: "Clear credential test",
-        url: "http://woo-mcp:3001/mcp",
+        url: "https://example.com/mcp",
         authType: "header",
         headerName: "X-Upstream-Token",
         credential,

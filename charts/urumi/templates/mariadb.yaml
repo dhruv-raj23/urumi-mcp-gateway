@@ -40,6 +40,7 @@ spec:
         app.kubernetes.io/name: mariadb
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 999

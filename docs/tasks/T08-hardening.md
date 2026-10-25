@@ -36,3 +36,69 @@
 - The live tests demonstrate the intended traffic restriction in this
   local k3d cluster. Repeat the enforcement checks if the cluster or CNI
   configuration changes.
+
+## Additional SSRF and workload hardening record — 25 October 2026
+
+The `feat/ssrf-hardening` branch adds application-level upstream
+destination checks and additional workload/chart controls.
+
+- Added shared destination validation for server registration, built-in
+  upstream definitions and outbound MCP connections.
+- Restricted the first-party HTTP exception to the expected service slug,
+  fully qualified Kubernetes Service hostname, port and `/mcp` path.
+- Required external upstreams to use HTTPS on the default port, rejected
+  unsafe host forms and URL credentials, and validated resolved addresses
+  when connections are made. Unsafe or mixed public/private DNS answers
+  are rejected.
+- Configured safe upstream fetching to reject destination changes and
+  disable automatic redirects.
+- Added IPv4 exclusions for private and other non-public destination ranges
+  to the relevant broad TCP 443 egress rules. This is defense-in-depth, not a
+  hostname allowlist or a complete IPv4/IPv6 egress policy.
+- Set `automountServiceAccountToken: false` on nine rendered workloads.
+  Chart checks cover nine workloads and 22 containers/init containers.
+- `npm audit --omit=dev` reported zero production dependency vulnerabilities
+  at the time of validation.
+
+Recorded branch validation:
+
+- `make check` passed with 187 gateway tests, 9 WooCommerce MCP tests,
+  6 time MCP tests, 5 notes MCP tests and 9 dashboard tests (216 total).
+- Gateway TypeScript type-check passed.
+- `git diff --check` passed.
+- Local and production Helm lint/render checks passed.
+- Chart policy checks and the repository secret scan passed.
+
+These results are branch validation, not proof of a live deployment. The
+currently running local Helm release has intentionally been left unchanged.
+For runtime acceptance, deploy the reviewed branch through the normal rollout
+procedure, verify pod readiness and health, and repeat allowed/blocked
+destination tests from the gateway and a non-privileged throwaway pod.
+Record the actual Helm revision and observed results only after those checks
+have run.
+
+## Live local acceptance — 25 October 2026 (Helm revision 43)
+
+- Deployed corrected gateway image `urumi/gateway:ssrf-eede0dd`.
+- `helm status` reported the release as deployed at revision 43.
+- All eight application pods were Ready; the gateway had zero restarts in
+  the latest observed pod listing.
+- The compiled production SSRF module accepted the matching WooCommerce MCP
+  service URL and rejected the tested loopback, metadata, external-HTTP and
+  mismatched-service-slug URLs.
+- Safe-fetch reached WooCommerce MCP and received HTTP 405 for the GET
+  connectivity probe. This verifies reachability, not a complete MCP call.
+- Positive control: the gateway connected to the WooCommerce pod endpoint
+  over TCP.
+- Negative connection probe: a temporary test pod received only a scoped
+  egress allowance to WooCommerce on TCP 3001, but its connection returned
+  `ECONNREFUSED`. The WooCommerce ingress policy allows gateway-labelled pods
+  only. The refusal is an observed negative result, not conclusive proof that
+  CNI NetworkPolicy enforcement caused the failure; a CNI-aware enforcement
+  check remains outstanding.
+- The temporary test pod and temporary egress policy were deleted.
+
+This acceptance evidence applies to the local k3d cluster and tested paths.
+It does not prove production behavior, full application-level MCP operation,
+or complete IPv4/IPv6 egress enforcement. The original known-good release
+revision 41 remains in Helm history.
