@@ -47,4 +47,8 @@ unchecked item still needs the evidence described below.
 
 Local k3d acceptance does not establish a live production deployment. GHCR
 image pullability, production DNS/TLS and a real VPS rollout remain unverified.
-Comprehensive SSRF filtering and per-role tool permissions are not implemented.
+Role-based tool authorization is implemented using a fixed admin/member
+allowlist. Evidence: `apps/gateway/src/mcp/toolPermissions.ts`,
+`apps/gateway/tests/toolPermissions.test.ts`, aggregator tests and HTTP
+metadata-filtering tests. Comprehensive SSRF filtering and per-user rate
+limiting remain unimplemented.

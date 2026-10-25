@@ -83,7 +83,7 @@ and outcome, plus an argument hash instead of full tool arguments.
 
 This reduces credential and customer-data exposure in records, but an audit
 entry cannot reconstruct every original argument. Audit logging supports
-investigation; it is not a substitute for permissions or rate limiting.
+investigation; it complements authorization checks but does not replace comprehensive rate limiting.
 
 ## 7. Chat agent
 
@@ -109,9 +109,10 @@ upstreams and an ordinary unauthorized pod could not reach Woo MCP.
 
 These controls do not constitute comprehensive SSRF protection. Arbitrary
 admin-added URLs are not protected by a complete destination filter, and
-TCP 443 egress remains broad for external provider access. Fine-grained
-per-role/per-tool permissions and comprehensive per-user rate limits are
-also not implemented.
+TCP 443 egress remains broad for external provider access. Role-based
+tool authorization is implemented with an explicit admin/member allowlist.
+It is not a configurable per-user policy, and comprehensive per-user rate
+limits are not implemented.
 
 The local Helm upgrade/rollback rehearsal demonstrated rollback of a visible
 replica-count change. It did not demonstrate a production VPS deployment.
@@ -119,8 +120,9 @@ replica-count change. It did not demonstrate a production VPS deployment.
 ## 9. Remaining limitations
 
 1. SSRF destination filtering and redirect/DNS protections need implementation.
-2. Fine-grained per-role/per-tool permissions and comprehensive rate limiting
-   remain future work.
+2. Tool authorization is a fixed role-based allowlist, not a configurable
+   per-user permission editor. Comprehensive per-user rate limiting remains
+   future work.
 3. Individual browser session revocation after logout is not implemented.
 4. Production GHCR image accessibility, DNS/TLS and a live VPS deployment
    have not been verified.

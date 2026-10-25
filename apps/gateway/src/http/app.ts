@@ -702,7 +702,7 @@ async function handleRequest(
     const servers = await collections.servers.find({}).sort({ slug: 1 }).toArray();
     sendJson(response, 200, {
       servers: servers.map((server) =>
-        publicServer(server, aggregator.getCachedTools(server)),
+        publicServer(server, aggregator.getCachedTools(server, user.role)),
       ),
     });
     return;
@@ -898,7 +898,7 @@ async function handleRequest(
       aggregator.invalidateServerTools(existing.slug);
     }
     sendJson(response, 200, {
-      server: publicServer(updated, aggregator.getCachedTools(updated)),
+      server: publicServer(updated, aggregator.getCachedTools(updated, user.role)),
     });
     return;
   }

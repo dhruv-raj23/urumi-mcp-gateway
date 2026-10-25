@@ -120,11 +120,11 @@ function makeCollections(servers: ServerDocument[]) {
   return { collections, servers, audits };
 }
 
-function makeUser(): GatewayMcpUser {
+function makeUser(role: GatewayMcpUser["role"] = "member"): GatewayMcpUser {
   return {
     userId: new ObjectId(),
     email: "member@example.com",
-    role: "member",
+    role,
   };
 }
 
@@ -154,13 +154,46 @@ function makeFactory(
 }
 
 describe("GatewayAggregator.listTools", () => {
+  it("filters member tools but preserves all tools for admins", async () => {
+    const fixture = makeCollections([makeServer("woo")]);
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: makeFactory({
+        listTools: async () => ({
+          tools: [
+            makeTool("list_products"),
+            makeTool("create_product"),
+            makeTool("list_orders"),
+            makeTool("get_order"),
+            makeTool("update_order_status"),
+          ],
+        }),
+      }),
+    });
+
+    const member = await aggregator.listTools(makeUser("member"));
+    expect(member.tools.map((tool) => tool.name)).toEqual([
+      "woo__list_products",
+      "woo__list_orders",
+      "woo__get_order",
+    ]);
+
+    const admin = await aggregator.listTools(makeUser("admin"));
+    expect(admin.tools.map((tool) => tool.name)).toEqual([
+      "woo__list_products",
+      "woo__create_product",
+      "woo__list_orders",
+      "woo__get_order",
+      "woo__update_order_status",
+    ]);
+  });
+
   it("prefixes the upstream tool name and description", async () => {
     const fixture = makeCollections([makeServer("woo")]);
     const aggregator = new GatewayAggregator(fixture.collections, {
       clientFactory: makeFactory(),
     });
 
-    const result = await aggregator.listTools(makeUser());
+    const result = await aggregator.listTools(makeUser("admin"));
 
     expect(result.tools).toHaveLength(1);
     expect(result.tools[0]?.name).toBe("woo__echo");
@@ -217,7 +250,7 @@ describe("GatewayAggregator.listTools", () => {
       clientFactory: makeFactory(),
     });
 
-    const result = await aggregator.listTools(makeUser());
+    const result = await aggregator.listTools(makeUser("admin"));
 
     expect(result.tools.map((tool) => tool.name)).toEqual(["woo__echo"]);
   });
@@ -234,7 +267,7 @@ describe("GatewayAggregator.listTools", () => {
       }),
     });
 
-    const result = await aggregator.listTools(makeUser());
+    const result = await aggregator.listTools(makeUser("admin"));
 
     expect(result.tools.map((tool) => tool.name)).toEqual(["woo__echo"]);
     expect(server.status).toBe("connected");
@@ -255,7 +288,7 @@ describe("GatewayAggregator.listTools", () => {
       }),
     });
 
-    const result = await aggregator.listTools(makeUser());
+    const result = await aggregator.listTools(makeUser("admin"));
 
     expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThanOrEqual(100_000);
     expect(result.tools.map((tool) => tool.name)).toEqual(["woo__echo"]);
@@ -279,6 +312,63 @@ describe("GatewayAggregator.listTools", () => {
 });
 
 describe("GatewayAggregator.callTool", () => {
+  it("denies a member write call before contacting upstream and audits the denial", async () => {
+    const fixture = makeCollections([makeServer("woo")]);
+    let upstreamFactoryCalls = 0;
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: async () => {
+        upstreamFactoryCalls += 1;
+        return {
+          listTools: async () => ({ tools: [] }),
+          callTool: async () => ({
+            content: [{ type: "text", text: "must not be reached" }],
+          }),
+          close: async () => undefined,
+        };
+      },
+    });
+
+    const result = await aggregator.callTool(
+      makeUser("member"),
+      "mcp",
+      "woo__create_product",
+      { name: "Blocked product", price: 10 },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      { type: "text", text: "Tool is not permitted for this role" },
+    ]);
+    expect(upstreamFactoryCalls).toBe(0);
+    expect(fixture.audits).toHaveLength(1);
+    expect(fixture.audits[0]?.outcome).toBe("denied");
+    expect(fixture.audits[0]?.toolName).toBe("create_product");
+  });
+
+  it("allows an admin write call and audits success", async () => {
+    const fixture = makeCollections([makeServer("woo")]);
+    let calledTool = "";
+    const aggregator = new GatewayAggregator(fixture.collections, {
+      clientFactory: makeFactory({
+        callTool: async (_server, name) => {
+          calledTool = name;
+          return { content: [{ type: "text", text: "created" }] };
+        },
+      }),
+    });
+
+    const result = await aggregator.callTool(
+      makeUser("admin"),
+      "mcp",
+      "woo__create_product",
+      { name: "Allowed product", price: 10 },
+    );
+
+    expect(calledTool).toBe("create_product");
+    expect(result.isError).toBeUndefined();
+    expect(fixture.audits[0]?.outcome).toBe("success");
+  });
+
   it("routes to the correct upstream tool with unchanged arguments", async () => {
     const server = makeServer("woo");
     const fixture = makeCollections([server]);
@@ -383,7 +473,7 @@ describe("GatewayAggregator.callTool", () => {
       }),
     });
 
-    const result = await aggregator.callTool(makeUser(), "mcp", "woo__echo", {});
+    const result = await aggregator.callTool(makeUser("admin"), "mcp", "woo__echo", {});
 
     expect(result.isError).toBe(true);
     expect(fixture.audits[0]?.outcome).toBe("error");
@@ -398,11 +488,11 @@ describe("GatewayAggregator cached tool metadata", () => {
       clientFactory: makeFactory(),
     });
 
-    expect(aggregator.getCachedTools(server)).toEqual([]);
+    expect(aggregator.getCachedTools(server, "admin")).toEqual([]);
 
     await aggregator.listTools(makeUser());
 
-    expect(aggregator.getCachedTools(server)).toEqual([
+    expect(aggregator.getCachedTools(server, "admin")).toEqual([
       {
         name: "time__echo",
         description: "[time] Tool echo",
@@ -423,11 +513,11 @@ describe("GatewayAggregator cached tool metadata", () => {
       });
 
       await aggregator.listTools(makeUser());
-      expect(aggregator.getCachedTools(server)).toHaveLength(1);
+      expect(aggregator.getCachedTools(server, "admin")).toHaveLength(1);
 
       vi.setSystemTime(new Date("2026-10-20T12:01:00.001Z"));
 
-      expect(aggregator.getCachedTools(server)).toEqual([]);
+      expect(aggregator.getCachedTools(server, "admin")).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
@@ -449,7 +539,7 @@ describe("GatewayAggregator cached tool metadata", () => {
 
     await aggregator.listTools(makeUser());
 
-    expect(aggregator.getCachedTools(server)).toEqual([
+    expect(aggregator.getCachedTools(server, "admin")).toEqual([
       {
         name: "woo__list_orders",
         description: "[woo] Tool list_orders",
@@ -460,7 +550,7 @@ describe("GatewayAggregator cached tool metadata", () => {
     await aggregator.listTools(makeUser());
 
     expect(server.status).toBe("unreachable");
-    expect(aggregator.getCachedTools(server)).toEqual([]);
+    expect(aggregator.getCachedTools(server, "admin")).toEqual([]);
   });
 
   it("clears cached metadata when a server becomes disabled", async () => {
@@ -471,13 +561,13 @@ describe("GatewayAggregator cached tool metadata", () => {
     });
 
     await aggregator.listTools(makeUser());
-    expect(aggregator.getCachedTools(server)).toHaveLength(1);
+    expect(aggregator.getCachedTools(server, "admin")).toHaveLength(1);
 
     server.enabled = false;
     await aggregator.refreshAllServerHealth();
 
     expect(server.status).toBe("disabled");
-    expect(aggregator.getCachedTools(server)).toEqual([]);
+    expect(aggregator.getCachedTools(server, "admin")).toEqual([]);
   });
 
   it("does not expose cached metadata while a server is unreachable", async () => {
@@ -488,9 +578,9 @@ describe("GatewayAggregator cached tool metadata", () => {
     });
 
     await aggregator.listTools(makeUser());
-    expect(aggregator.getCachedTools(server)).toHaveLength(1);
+    expect(aggregator.getCachedTools(server, "admin")).toHaveLength(1);
 
     server.status = "unreachable";
-    expect(aggregator.getCachedTools(server)).toEqual([]);
+    expect(aggregator.getCachedTools(server, "admin")).toEqual([]);
   });
 });

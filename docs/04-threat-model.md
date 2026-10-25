@@ -18,9 +18,12 @@ shared tool authority within that exposed surface.
 Implemented controls include per-user API keys, key revocation, user-aware
 audit records, admin-only server management, encrypted upstream credentials,
 internal-only upstream Services, NetworkPolicies, and bounded upstream
-timeouts. Fine-grained per-role/per-tool authorization and comprehensive
-per-user rate limiting are not implemented. Audit logs help investigation
-but do not prevent misuse.
+timeouts, and fixed role-based tool authorization. Members can only list
+and invoke explicitly allowlisted tools; restricted direct calls are denied
+before an upstream connection and logged as denied. Admins can use all
+otherwise available tools. This policy is not configurable per user, and
+comprehensive per-user rate limiting is not implemented. Audit logs help
+investigation but do not prevent misuse.
 
 ## 2. Why client tokens are not passed upstream
 
@@ -47,8 +50,9 @@ eight iterations, and calls use the same user-attributed gateway path.
 These measures are not a complete prompt-injection defense. A model may
 still be influenced by malicious text and choose an action available through
 the exposed tool set. Prefixing a description indicates provenance; it does
-not sanitize the description or make its contents trustworthy. Fine-grained
-tool permissions are not implemented.
+not sanitize the description or make its contents trustworthy. The fixed
+role-based allowlist limits member tool access, but it does not eliminate
+prompt-injection risk. Review new tools before adding them to the allowlist.
 
 Review upstream ownership, code, tool definitions and returned data before
 trusting a new server. Limit credential authority and monitor audit events.
@@ -62,9 +66,10 @@ requests. Chat history remains in browser memory and is sent with chat
 requests; the gateway does not persist chat transcripts or log full chat
 message bodies.
 
-The principal shared risk is tool authority: members can invoke the tools
-enabled for the gateway. Audit logging provides attribution but does not
-replace server-side authorization or rate limiting.
+Members can invoke only allowlisted tools, while admins retain access to
+otherwise available write tools. Audit logging provides attribution but does
+not replace authorization checks or comprehensive rate limiting. The policy
+is fixed in code rather than configurable for individual members.
 
 Browser sessions use stateless signed cookies with an eight-hour expiry.
 A copied cookie may remain valid until expiry after logout while its user

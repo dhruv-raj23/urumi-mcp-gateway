@@ -22,6 +22,7 @@ import {
   buildExposedToolName,
   parseExposedToolName,
 } from "./toolNaming.js";
+import { isToolAllowedForRole } from "./toolPermissions.js";
 
 const DEFAULT_LIST_TIMEOUT_MS = 5_000;
 const DEFAULT_CALL_TIMEOUT_MS = 30_000;
@@ -301,6 +302,7 @@ export class GatewayAggregator {
 
   getCachedTools(
     server: Pick<ServerDocument, "slug" | "enabled" | "status">,
+    role: UserRole,
   ): PublicServerTool[] {
     if (!server.enabled || server.status !== "connected") {
       this.invalidateServerTools(server.slug);
@@ -313,7 +315,9 @@ export class GatewayAggregator {
       return [];
     }
 
-    return entry.tools.map((tool) => ({ ...tool }));
+    return entry.tools
+      .filter((tool) => isToolAllowedForRole(role, tool.name))
+      .map((tool) => ({ ...tool }));
   }
 
   invalidateServerTools(serverSlug: string): void {
@@ -334,7 +338,7 @@ export class GatewayAggregator {
    * List tools from connected, enabled servers in parallel.
    * A failed upstream is marked unreachable and does not fail the whole list.
    */
-  async listTools(_user: GatewayMcpUser): Promise<ListToolsResult> {
+  async listTools(user: GatewayMcpUser): Promise<ListToolsResult> {
     const servers = await this.collections.servers
       .find({ enabled: true, status: "connected" })
       .sort({ slug: 1 })
@@ -378,6 +382,12 @@ export class GatewayAggregator {
 
     for (const batch of batches) {
       for (const tool of batch.tools) {
+        // Keep cached upstream metadata complete, but filter each caller's
+        // public MCP tool list according to their role.
+        if (!isToolAllowedForRole(user.role, tool.name)) {
+          continue;
+        }
+
         const serialized = JSON.stringify(tool);
 
         if (serialized === undefined) {
@@ -484,6 +494,10 @@ export class GatewayAggregator {
       if (!parsed) {
         outcome = "denied";
         response = toolError("Invalid gateway tool name");
+      } else if (!isToolAllowedForRole(user.role, exposedName)) {
+        // Enforce authorization before accessing or connecting to an upstream.
+        outcome = "denied";
+        response = toolError("Tool is not permitted for this role");
       } else {
         const server = await this.collections.servers.findOne({
           slug: parsed.serverSlug,

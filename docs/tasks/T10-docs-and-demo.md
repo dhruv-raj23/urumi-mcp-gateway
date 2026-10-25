@@ -48,6 +48,7 @@
 
 - A real VPS deployment, production DNS/TLS, and public pullability of the
   configured GHCR image tags have not been demonstrated.
-- Comprehensive SSRF destination filtering, per-role/per-tool permissions
-  and comprehensive per-user rate limiting are not implemented.
+- Fixed role-based tool authorization is implemented and tested; the policy
+  is not configurable per user. Comprehensive SSRF destination filtering and
+  comprehensive per-user rate limiting remain unimplemented.
 - ESLint is not configured; the repository lint scripts are TODO stubs.

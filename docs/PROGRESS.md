@@ -52,11 +52,13 @@ requirement-by-requirement evidence and remaining acceptance work.
 
 A real VPS deployment, public pullability of the configured GHCR image tags,
 production DNS/TLS and production backup/restore remain unverified.
-Comprehensive SSRF destination filtering, per-role/per-tool permissions and
-comprehensive per-user rate limiting are not implemented.
+Role-based tool authorization is implemented with a fixed allowlist and
+tested at the policy, aggregator and dashboard metadata layers. Comprehensive
+SSRF destination filtering and per-user rate limiting remain unimplemented.
 
 ## Stand-out items attempted
 
-NetworkPolicy hardening, a local Helm upgrade/rollback rehearsal, and
-idempotent default WooCommerce server registration are implemented and
-documented. The SSRF guard and per-role tool authorization remain future work.
+NetworkPolicy hardening, a local Helm upgrade/rollback rehearsal,
+idempotent default WooCommerce server registration, and fixed role-based tool
+authorization are implemented and documented. Comprehensive SSRF filtering
+and per-user rate limiting remain future work.

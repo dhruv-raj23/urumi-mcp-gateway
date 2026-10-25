@@ -1392,13 +1392,13 @@ describe("server tool metadata HTTP response", () => {
 
     const createdKey = await createUserApiKey(
       collections.apikeys,
-      memberId,
+      adminId,
       "server metadata integration test",
     );
 
     const fetchServer = async () => {
       const response = await fetch(`${baseUrl}/api/servers`, {
-        headers: { cookie: sessionCookie(memberId) },
+        headers: { cookie: sessionCookie(adminId) },
       });
       expect(response.status).toBe(200);
 
@@ -1462,6 +1462,28 @@ describe("server tool metadata HTTP response", () => {
         },
       ]);
 
+      // Cached metadata is filtered for members, not just for MCP clients.
+      const memberResponse = await fetch(`${baseUrl}/api/servers`, {
+        headers: { cookie: sessionCookie(memberId) },
+      });
+      expect(memberResponse.status).toBe(200);
+
+      const memberBody = await memberResponse.json() as {
+        servers: Array<{
+          slug: string;
+          toolCount: number;
+          tools: Array<{ name: string; description: string }>;
+        }>;
+      };
+
+      const memberServer = memberBody.servers.find(
+        (entry) => entry.slug === upstream.slug,
+      );
+
+      expect(memberServer).toBeDefined();
+      expect(memberServer?.toolCount).toBe(0);
+      expect(memberServer?.tools).toEqual([]);
+
       // Disabling through the real REST route must remove old metadata.
       const disabledResponse = await fetch(
         `${baseUrl}/api/servers/${upstream._id.toHexString()}`,
@@ -1518,7 +1540,7 @@ describe("server tool metadata HTTP response", () => {
         {
           method: "DELETE",
           headers: {
-            cookie: sessionCookie(memberId),
+            cookie: sessionCookie(adminId),
             "content-type": "application/json",
           },
         },
@@ -1665,7 +1687,7 @@ describe("chat HTTP route integration", () => {
       const response = await fetch(`${baseUrl}/api/chat`, {
         method: "POST",
         headers: {
-          cookie: sessionCookie(memberId),
+          cookie: sessionCookie(adminId),
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -1720,8 +1742,8 @@ describe("chat HTTP route integration", () => {
       const newAuditRows = auditDocuments.slice(auditStart);
       expect(newAuditRows).toHaveLength(1);
       expect(newAuditRows[0]?.source).toBe("chat");
-      expect(newAuditRows[0]?.userId.equals(memberId)).toBe(true);
-      expect(newAuditRows[0]?.userEmail).toBe("member@example.com");
+      expect(newAuditRows[0]?.userId.equals(adminId)).toBe(true);
+      expect(newAuditRows[0]?.userEmail).toBe("admin@example.com");
       expect(newAuditRows[0]?.serverSlug).toBe("testchat");
       expect(newAuditRows[0]?.toolName).toBe("echo");
       expect(newAuditRows[0]?.outcome).toBe("success");

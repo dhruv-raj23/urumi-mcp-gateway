@@ -136,9 +136,10 @@ screenshots or a recording. Revoking a key should make the next request using
 it unauthorized.
 
 Members are scoped to their own keys and audit entries. Admins have broader
-administrative and audit visibility. All members can invoke the gateway's
-enabled, exposed tools; fine-grained per-role/per-tool authorization is not
-implemented.
+administrative and audit visibility. Tool access uses a fixed role-based
+allowlist: members can see and invoke approved read-only tools, while admins
+can use all otherwise available tools. Unknown tools are denied to members
+by default, and denied calls are recorded in the audit log.
 
 ## 5. Place a WooCommerce order
 
@@ -277,9 +278,11 @@ MongoDB, MariaDB and WordPress content before using real customer data.
   validator checks HTTP(S) and rejects embedded user-info, but does not
   comprehensively block loopback, private, cluster-internal, link-local or
   metadata destinations.
-- Members can invoke all enabled tools exposed by the gateway. Fine-grained
-  per-role tool permissions and comprehensive per-user rate limiting are not
-  implemented.
+- Role-based tool authorization uses a fixed allowlist in
+  `apps/gateway/src/mcp/toolPermissions.ts`. Member tool lists and dashboard
+  server metadata are filtered, and restricted direct calls are rejected
+  before connecting to an upstream. Comprehensive per-user rate limiting
+  is not implemented.
 - Browser sessions use stateless signed cookies with an eight-hour expiry.
   A copied cookie may remain valid until expiry after logout if the account
   remains active; disabling the account blocks subsequent requests.
@@ -300,8 +303,9 @@ See `docs/04-threat-model.md` and `docs/05-design-and-tradeoffs.md`.
   `apps/gateway/tests/defaultServers.test.ts`. Fresh registration was tested
   against a temporary MongoDB collection.
 
-The optional SSRF filter and per-role tool authorization are not implemented.
-A real VPS deployment has not been completed.
+Role-based tool authorization is implemented and covered by gateway tests.
+Comprehensive SSRF destination filtering and comprehensive per-user rate
+limiting remain incomplete. A real VPS deployment has not been completed.
 
 ## 12. Submission checklist
 

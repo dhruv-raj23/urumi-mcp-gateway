@@ -133,9 +133,15 @@ Explain:
 - Discovery/calls use timeouts, and independent upstreams can continue.
 - NetworkPolicies restrict intended traffic paths.
 
+Demonstrate role-based tool authorization: as a member, show that
+`woo__create_product` and `woo__update_order_status` are absent from the tool
+list and that a direct call is denied and audited. Then show that an admin
+retains write access.
+
 State the limitations honestly: comprehensive SSRF destination filtering,
-per-role/per-tool permissions and comprehensive per-user rate limiting are
-not implemented. URL syntax validation is not a complete SSRF defense.
+configurable per-user permission policies and comprehensive per-user rate
+limiting are not implemented. URL syntax validation is not a complete SSRF
+defense.
 
 ## 10. Local-to-VPS and Helm rollback
 
