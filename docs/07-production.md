@@ -254,9 +254,13 @@ and it does not by itself prove that all IPv4 or IPv6 destinations are safe.
 Review the effective policy and its enforcement in the target cluster and
 network plugin before production use.
 
-The `feat/ssrf-hardening` changes have passed branch-level tests and chart
-validation, but these results are not a production deployment or a live
-network-policy acceptance test. Before deployment, rerun the repository
-checks, review the rendered production NetworkPolicies, and perform explicit
-allowed/blocked destination tests in the target environment. Keep upstream
-credentials least-privileged and register only reviewed endpoints.
+The `feat/ssrf-hardening` changes passed branch-level tests and chart
+validation and were deployed to the local k3d cluster as Helm revision 43.
+Local runtime checks exercised SSRF destination rejection and the
+authorized WooCommerce connection. A non-gateway connection probe returned
+`ECONNREFUSED`, but this does not conclusively prove CNI NetworkPolicy
+enforcement. These checks are not a production deployment or proof of complete
+egress enforcement; CNI-aware policy verification remains outstanding. Before production deployment, rerun the repository checks,
+review the rendered production NetworkPolicies, and repeat allowed/blocked
+destination tests in the target environment. Keep upstream credentials
+least-privileged and register only reviewed endpoints.

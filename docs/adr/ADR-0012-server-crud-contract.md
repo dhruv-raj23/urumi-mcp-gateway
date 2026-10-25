@@ -35,7 +35,14 @@ The `feat/ssrf-hardening` implementation narrows the original URL policy:
   TCP 443 egress rules. This does not amount to a hostname allowlist and is
   not a complete IPv6 or cluster-wide egress defense.
 
-Validation recorded for this branch includes SSRF tests, gateway type-check,
-production dependency audit and Helm/chart checks. This update has not yet
-been deployed to the running local release; branch validation must not be
-represented as live runtime acceptance.
+Validation includes SSRF tests, gateway type-check, Helm/chart checks
+and local k3d runtime tests. The corrected gateway image
+`urumi/gateway:ssrf-eede0dd` was deployed in Helm revision 43. Runtime tests
+confirmed that the built-in WooCommerce destination was accepted, the tested
+unsafe destinations were rejected, and safe-fetch reached the WooCommerce MCP
+endpoint. The isolated non-gateway pod received `ECONNREFUSED` while its egress
+was temporarily limited to that service. This is an observed connection
+failure, but it does not conclusively establish that NetworkPolicy enforcement
+caused it; a CNI-aware enforcement test remains outstanding. These local
+results do not constitute production acceptance or demonstrate complete
+IPv4/IPv6 egress coverage.

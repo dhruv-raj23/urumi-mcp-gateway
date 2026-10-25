@@ -76,3 +76,29 @@ procedure, verify pod readiness and health, and repeat allowed/blocked
 destination tests from the gateway and a non-privileged throwaway pod.
 Record the actual Helm revision and observed results only after those checks
 have run.
+
+## Live local acceptance — 25 October 2026 (Helm revision 43)
+
+- Deployed corrected gateway image `urumi/gateway:ssrf-eede0dd`.
+- `helm status` reported the release as deployed at revision 43.
+- All eight application pods were Ready; the gateway had zero restarts in
+  the latest observed pod listing.
+- The compiled production SSRF module accepted the matching WooCommerce MCP
+  service URL and rejected the tested loopback, metadata, external-HTTP and
+  mismatched-service-slug URLs.
+- Safe-fetch reached WooCommerce MCP and received HTTP 405 for the GET
+  connectivity probe. This verifies reachability, not a complete MCP call.
+- Positive control: the gateway connected to the WooCommerce pod endpoint
+  over TCP.
+- Negative connection probe: a temporary test pod received only a scoped
+  egress allowance to WooCommerce on TCP 3001, but its connection returned
+  `ECONNREFUSED`. The WooCommerce ingress policy allows gateway-labelled pods
+  only. The refusal is an observed negative result, not conclusive proof that
+  CNI NetworkPolicy enforcement caused the failure; a CNI-aware enforcement
+  check remains outstanding.
+- The temporary test pod and temporary egress policy were deleted.
+
+This acceptance evidence applies to the local k3d cluster and tested paths.
+It does not prove production behavior, full application-level MCP operation,
+or complete IPv4/IPv6 egress enforcement. The original known-good release
+revision 41 remains in Helm history.

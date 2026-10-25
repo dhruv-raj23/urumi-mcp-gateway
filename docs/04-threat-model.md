@@ -111,12 +111,26 @@ hostname allowlist, do not replace application-layer destination validation,
 and are not a complete egress defense. The exclusions are IPv4-specific;
 IPv6 behavior and enforcement depend on the cluster networking configuration.
 
-The `feat/ssrf-hardening` branch passed the recorded SSRF tests and chart
-checks. These are branch-level results, not live deployment acceptance. The
-running local Helm release has intentionally not been updated with these
-changes. After a reviewed rollout, verify pod health and repeat allowed and
-blocked destination tests in the actual cluster before claiming the combined
-controls are runtime-verified. See ADR-0012.
+The `feat/ssrf-hardening` branch was deployed to the local k3d cluster
+in Helm revision 43 using gateway image `urumi/gateway:ssrf-eede0dd`.
+
+Runtime checks confirmed that the trusted WooCommerce URL is accepted, unsafe
+test destinations are rejected, and safe-fetch reached WooCommerce MCP. The
+GET connectivity probe returned HTTP 405, which confirms an HTTP response but
+does not constitute a successful MCP operation.
+
+For the NetworkPolicy negative control, a temporary egress policy allowed
+only a test pod to connect to WooCommerce MCP. A positive control confirmed
+that the gateway could connect to the same endpoint; the non-gateway test
+pod received `ECONNREFUSED`. An immediate refusal does not uniquely
+prove a NetworkPolicy drop, so this is an observed negative connection result,
+not conclusive proof of CNI enforcement. A CNI-aware enforcement check remains
+outstanding. The temporary pod and policy were removed afterward.
+
+All eight application pods were ready after the rollout, and the gateway had
+zero restarts in the latest observed pod listing. This is evidence from the
+tested local k3d cluster, not a production deployment or proof of complete
+IPv4/IPv6 egress enforcement. See ADR-0012.
 
 ## 6. Operational risks
 
