@@ -256,11 +256,15 @@ network plugin before production use.
 
 The `feat/ssrf-hardening` changes passed branch-level tests and chart
 validation and were deployed to the local k3d cluster as Helm revision 43.
-Local runtime checks exercised SSRF destination rejection and the
-authorized WooCommerce connection. A non-gateway connection probe returned
-`ECONNREFUSED`, but this does not conclusively prove CNI NetworkPolicy
-enforcement. These checks are not a production deployment or proof of complete
-egress enforcement; CNI-aware policy verification remains outstanding. Before production deployment, rerun the repository checks,
+Local runtime checks exercised SSRF destination rejection and the authorized
+WooCommerce connection. A non-gateway probe with scoped egress permission
+received `ECONNREFUSED` when connecting to the WooCommerce pod IP. Current K3s
+firewall rules showed the WooCommerce pod chain traversing
+`urumi-woo-mcp-ingress` and a `REJECT` rule for traffic not marked as allowed.
+We did not capture a before/after counter delta for the probe, so this is
+strong supporting evidence of enforcement, not a conclusive rule-specific
+packet-drop measurement. These checks do not establish production behavior or
+complete IPv4/IPv6 egress enforcement. Before production deployment, rerun the repository checks,
 review the rendered production NetworkPolicies, and repeat allowed/blocked
 destination tests in the target environment. Keep upstream credentials
 least-privileged and register only reviewed endpoints.
