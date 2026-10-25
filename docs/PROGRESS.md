@@ -37,6 +37,18 @@ requirement-by-requirement evidence and remaining acceptance work.
   36 → 37 → 38. The gateway update was subsequently deployed at revision 39.
 - The lint targets still print a TODO; ESLint is not configured.
 
+## Observability implementation — 25 October 2026
+
+- [x] Added a process-local Prometheus-format tool metrics collector.
+- [x] Added per-server/outcome call counters and latency histograms.
+- [x] Added internal GET /metrics and HTTP tests for text output and method rejection.
+- [x] Focused tests passed: 84; gateway TypeScript typecheck passed.
+- [x] Full make check passed with 198 automated tests and repository checks.
+- [ ] Build and deploy the observability gateway image in k3d.
+- [ ] Verify live metrics change after actual tool calls.
+- [ ] Prometheus scraping is not configured; metrics reset on restart and
+      are not aggregated across replicas.
+
 ## Remaining acceptance work
 
 - [ ] Rehearse the complete README from a clean working copy without removing

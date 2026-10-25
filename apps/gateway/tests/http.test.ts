@@ -772,6 +772,29 @@ describe("gateway authentication HTTP routes", () => {
     await expect(response.json()).resolves.toEqual({ status: "ok" });
   });
 
+  it("exposes Prometheus metrics in text format", async () => {
+    const response = await fetch(`${baseUrl}/metrics`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/plain");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+
+    const body = await response.text();
+    expect(body).toContain("# TYPE urumi_gateway_tool_calls_total counter");
+    expect(body).toContain(
+      "# TYPE urumi_gateway_tool_call_duration_seconds histogram",
+    );
+  });
+
+  it("allows only GET on the metrics endpoint", async () => {
+    const response = await fetch(`${baseUrl}/metrics`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("GET");
+  });
+
   it("rejects unknown fields, including userId, when creating a key", async () => {
     const response = await fetch(`${baseUrl}/api/keys`, {
       method: "POST",

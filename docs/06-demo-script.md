@@ -165,7 +165,26 @@ kubectl get networkpolicy -n urumi
 This was a local k3d rehearsal, not a production VPS deployment. Do not
 describe GHCR pullability, production DNS/TLS or a live VPS as verified.
 
-## 11. After recording
+## 11. Internal tool-call metrics
+
+After deploying the observability image, open a local port-forward:
+
+    kubectl port-forward -n urumi deployment/gateway 3000:3000
+
+In another terminal, run:
+
+    curl -fsS http://127.0.0.1:3000/metrics
+
+Make a safe read-only tool call, fetch the metrics again, and verify the
+corresponding server/outcome counter changes. Verify that a denied member
+write call is counted as denied. Do not expose this endpoint through public
+Ingress.
+
+Live verification remains pending until deployment. Metrics are process-local,
+reset on restart and are not aggregated across replicas. Prometheus scraping
+is not configured.
+
+## 12. After recording
 
 - Watch the entire video once.
 - Ensure User A and User B are distinct member accounts.

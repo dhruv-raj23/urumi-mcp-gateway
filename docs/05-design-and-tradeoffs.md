@@ -117,7 +117,27 @@ limits are not implemented.
 The local Helm upgrade/rollback rehearsal demonstrated rollback of a visible
 replica-count change. It did not demonstrate a production VPS deployment.
 
-## 9. Remaining limitations
+## 9. Internal tool-call observability
+
+The gateway exposes Prometheus text-format metrics at `GET /metrics`:
+
+- `urumi_gateway_tool_calls_total` counts tool-call attempts by server and
+  outcome (`success`, `error`, `timeout` or `denied`).
+- `urumi_gateway_tool_call_duration_seconds` is a latency histogram with
+  cumulative buckets, sum and count, using seconds.
+
+Labels are restricted to server slug and outcome; user identity, API keys,
+tool arguments and tool names are not exported as metric labels. Denied calls
+are counted along with successful and failed calls.
+
+The endpoint is intentionally not mapped through the public Ingress. It can
+be inspected through a Kubernetes port-forward. No Prometheus deployment or
+scrape configuration is included. Metrics are held in process memory, reset
+when a gateway process restarts, and are not aggregated across replicas.
+This is lightweight instrumentation, not production-grade monitoring or
+durable historical telemetry.
+
+## 10. Remaining limitations
 
 1. SSRF destination filtering and redirect/DNS protections need implementation.
 2. Tool authorization is a fixed role-based allowlist, not a configurable

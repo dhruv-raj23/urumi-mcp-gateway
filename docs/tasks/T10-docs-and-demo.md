@@ -30,6 +30,18 @@
 - [x] Local Helm upgrade and rollback evidence is recorded in
       `docs/07-production.md`.
 
+### Observability addendum — 25 October 2026
+
+- [x] Metrics collector tests cover counters, histogram buckets, latency
+      sum/count, safe labels and the empty initial state.
+- [x] HTTP tests cover Prometheus text output and rejection of non-GET
+      requests to /metrics.
+- [x] Focused tests passed: 84; full make check passed with 198 automated
+      tests; gateway TypeScript typecheck passed.
+- [ ] Verify the observability image and metrics endpoint in the live cluster.
+- [ ] Prometheus scraping remains unconfigured. Metrics are process-local,
+      reset on restart and not aggregated across replicas.
+
 ## Remaining acceptance tasks
 
 - [ ] Rehearse the README workflow from a clean working copy. Do not delete

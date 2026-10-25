@@ -334,6 +334,26 @@ async function handleRequest(
     return;
   }
 
+  // Intentionally omitted from the public Ingress. Scrape through an internal
+  // path such as kubectl port-forward unless a restricted Prometheus policy is added.
+  if (path === "/metrics") {
+    if (method !== "GET") {
+      request.resume();
+      response.setHeader("Allow", "GET");
+      sendError(response, 405, "method_not_allowed", "Only GET is supported at /metrics");
+      return;
+    }
+
+    response.statusCode = 200;
+    response.setHeader(
+      "Content-Type",
+      "text/plain; version=0.0.4; charset=utf-8",
+    );
+    response.setHeader("Cache-Control", "no-store");
+    response.end(aggregator.renderMetrics());
+    return;
+  }
+
   if (path === "/mcp") {
     if (method !== "POST") {
       request.resume();

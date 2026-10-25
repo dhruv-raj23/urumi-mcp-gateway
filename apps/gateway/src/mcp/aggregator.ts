@@ -23,6 +23,7 @@ import {
   parseExposedToolName,
 } from "./toolNaming.js";
 import { isToolAllowedForRole } from "./toolPermissions.js";
+import { GatewayToolMetrics } from "../observability/toolMetrics.js";
 
 const DEFAULT_LIST_TIMEOUT_MS = 5_000;
 const DEFAULT_CALL_TIMEOUT_MS = 30_000;
@@ -277,6 +278,7 @@ export class GatewayAggregator {
   private readonly encryptionKey: string | undefined;
   private readonly clientFactory: UpstreamMcpClientFactory;
   private readonly toolMetadataCache = new Map<string, ToolMetadataCacheEntry>();
+  private readonly toolMetrics = new GatewayToolMetrics();
 
   constructor(
     private readonly collections: GatewayCollections,
@@ -298,6 +300,10 @@ export class GatewayAggregator {
       options.clientFactory ??
       ((server, timeoutMs) =>
         createSdkUpstreamClient(server, this.encryptionKey, timeoutMs));
+  }
+
+  renderMetrics(): string {
+    return this.toolMetrics.renderPrometheus();
   }
 
   getCachedTools(
@@ -576,6 +582,12 @@ export class GatewayAggregator {
       outcome = "error";
       response = toolError("Tool call could not be completed");
     }
+
+    this.toolMetrics.recordCall(
+      serverSlug,
+      outcome,
+      Math.max(0, Date.now() - startedAt),
+    );
 
     try {
       await writeAuditLog(this.collections.auditlogs, {

@@ -35,6 +35,15 @@ unchecked item still needs the evidence described below.
 | R27 | Threat model covers the four required topics | T10 | `docs/04-threat-model.md` | [x] |
 | R28 | Local-to-VPS story and Helm upgrade/rollback | T09,T10 | `docs/07-production.md`; local revisions 36 → 37 → 38 documented | [x] |
 
+## Additional engineering evidence
+
+- Tool-call observability has automated tests for Prometheus counters,
+  cumulative latency histogram buckets, safe server labels and the HTTP route.
+- `make check` passed with 198 automated tests, plus repository, secret and
+  chart-policy checks; gateway TypeScript typecheck passed.
+- Deployment and live-cluster verification of the new metrics endpoint remain
+  pending. Prometheus installation and scraping are not implemented.
+
 ## Remaining acceptance evidence
 
 - **R4:** Capture `kubectl get pvc -n urumi` and verify persistence after safe

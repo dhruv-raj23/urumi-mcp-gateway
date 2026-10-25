@@ -304,6 +304,14 @@ See `docs/04-threat-model.md` and `docs/05-design-and-tradeoffs.md`.
   against a temporary MongoDB collection.
 
 Role-based tool authorization is implemented and covered by gateway tests.
+
+The gateway also implements an internal Prometheus-format `/metrics` endpoint
+with per-server call counters, outcome counts and latency histograms. Automated
+tests cover the collector and HTTP route. The endpoint is not exposed through
+the public Ingress; live-cluster verification and Prometheus scraping remain
+pending. Metrics are process-local, reset on restart, and are not aggregated
+across gateway replicas.
+
 Comprehensive SSRF destination filtering and comprehensive per-user rate
 limiting remain incomplete. A real VPS deployment has not been completed.
 

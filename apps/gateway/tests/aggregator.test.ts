@@ -343,6 +343,9 @@ describe("GatewayAggregator.callTool", () => {
     expect(fixture.audits).toHaveLength(1);
     expect(fixture.audits[0]?.outcome).toBe("denied");
     expect(fixture.audits[0]?.toolName).toBe("create_product");
+    expect(aggregator.renderMetrics()).toContain(
+      'urumi_gateway_tool_calls_total{server="woo",outcome="denied"} 1',
+    );
   });
 
   it("allows an admin write call and audits success", async () => {
@@ -367,6 +370,9 @@ describe("GatewayAggregator.callTool", () => {
     expect(calledTool).toBe("create_product");
     expect(result.isError).toBeUndefined();
     expect(fixture.audits[0]?.outcome).toBe("success");
+    expect(aggregator.renderMetrics()).toContain(
+      'urumi_gateway_tool_calls_total{server="woo",outcome="success"} 1',
+    );
   });
 
   it("routes to the correct upstream tool with unchanged arguments", async () => {
@@ -448,6 +454,9 @@ describe("GatewayAggregator.callTool", () => {
     ]);
     expect(server.status).toBe("unreachable");
     expect(fixture.audits[0]?.outcome).toBe("timeout");
+    expect(aggregator.renderMetrics()).toContain(
+      'urumi_gateway_tool_calls_total{server="woo",outcome="timeout"} 1',
+    );
   });
 
   it("rejects malformed public tool names and records denial", async () => {
