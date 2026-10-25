@@ -1,6 +1,6 @@
 import { lookup as systemLookup } from "node:dns/promises";
 import type { TcpSocketConnectOpts } from "node:net";
-import * as ipaddr from "ipaddr.js";
+import ipaddr from "ipaddr.js";
 import {
   Agent,
   fetch as undiciFetch,
