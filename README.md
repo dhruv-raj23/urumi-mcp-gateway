@@ -100,7 +100,10 @@ curl -sS -o /dev/null -w 'store HTTP %{http_code}\n' http://store.localhost/
 ```
 
 Both browser endpoints should return HTTP 200 when healthy. First startup can
-take time while WordPress and WooCommerce initialization completes.
+take time while WordPress and WooCommerce initialization completes. Bootstrap
+preserves an existing `wp-content` volume, seeds it from the WordPress image
+only when empty, and installs WooCommerce from the official stable plugin
+archive.
 
 If `*.localhost` fails to resolve in your environment, check hostname
 resolution. Depending on the host/client, add `127.0.0.1 app.localhost` and

@@ -65,7 +65,7 @@ spec:
             - -ec
             - |
               if [ ! -f /var/www/html/wp-includes/version.php ]; then
-                cp -Rn /usr/src/wordpress/. /var/www/html/
+                find /usr/src/wordpress -mindepth 1 -maxdepth 1 ! -name wp-content -exec cp -Rn {} /var/www/html/ \;
               fi
               test -s /var/www/html/wp-includes/version.php
           securityContext:

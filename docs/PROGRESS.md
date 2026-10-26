@@ -13,7 +13,7 @@ requirement-by-requirement evidence and remaining acceptance work.
 - [x] T07 Chat agent, bounded tool loop and user-aware audit attribution
 - [x] T08 NetworkPolicy and workload hardening
 - [x] T09 Production values and local Helm upgrade/rollback rehearsal
-- [ ] T10 Pre-submission review, clean-copy README rehearsal and submission (demo recorded 26 October 2026)
+- [ ] T10 Final submission (README rehearsal and demo review completed; assignment-form submission remains pending)
 
 ## Verification recorded on 24 October 2026
 
@@ -64,8 +64,10 @@ requirement-by-requirement evidence and remaining acceptance work.
 
 ## Remaining acceptance work
 
-- [ ] Rehearse the complete README from a clean working copy without removing
-      or resetting the active assignment cluster.
+- [x] Rehearse the README from a clean checkout using the isolated
+      `urumi-rehearsal` cluster; Helm revision 2 deployed, application pods
+      became Ready, both HTTP endpoints returned 200, and the user confirmed
+      the dashboard, WooCommerce and Antigravity MCP acceptance flows.
 - [x] Review the recorded video and verify the two-user flow: User A (admin)
       uses chat for product creation; User B (member) uses external MCP. Confirm
       `source=chat` and `source=mcp` are attributed to the correct users.
@@ -74,7 +76,7 @@ requirement-by-requirement evidence and remaining acceptance work.
       visible credentials or customer-identifying data.
 - [ ] Submit the video and repository through the assignment form.
 - [x] R24 video recording and review completed.
-- [ ] R25 remains pending until the clean-copy README rehearsal succeeds.
+- [x] R25 clean-copy README rehearsal completed on 26 October 2026.
 
 ## Known limitations and unverified production work
 

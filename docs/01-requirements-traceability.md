@@ -30,7 +30,7 @@ unchecked item still needs the evidence described below.
 | R22 | Chat acts as signed-in user and records attribution | T07 | Local audit evidence and reviewed video confirm the chat actor and `source=chat` for User A (admin) | [x] |
 | R23 | LLM key stored in Kubernetes Secret | T00,T07 | `urumi-gateway` Secret wiring and chart/secret scans | [x] |
 | R24 | Two-user end-to-end demo video | T10 | Video recorded and reviewed; required flows, distinct identities, audit attribution and secret redaction checked on 26 October 2026 | [x] |
-| R25 | README covers local, VPS, order, external client and chat | T10 | README written; rehearse the complete setup from a clean working copy before checking complete | [ ] |
+| R25 | README covers local, VPS, order, external client and chat | T10 | Clean-checkout rehearsal on 26 October 2026: isolated k3d deployment succeeded at Helm revision 2, application pods became Ready, both HTTP endpoints returned 200, and dashboard, WooCommerce, API-key, team, audit, chat and Antigravity MCP flows were confirmed | [x] |
 | R26 | System design and trade-offs note | T10 | `docs/05-design-and-tradeoffs.md` | [x] |
 | R27 | Threat model covers the four required topics | T10 | `docs/04-threat-model.md` | [x] |
 | R28 | Local-to-VPS story and Helm upgrade/rollback | T09,T10 | `docs/07-production.md`; local revisions 36 → 37 → 38 documented | [x] |
@@ -45,11 +45,13 @@ unchecked item still needs the evidence described below.
   tool call incremented the success counter, and a denied WooCommerce write
   attempt incremented the denied counter. Prometheus scraping is not configured.
 
-## Remaining acceptance evidence
+## Acceptance evidence notes
 
-- **R25:** Follow the README from a clean working copy. The local deploy target
-  was aligned with locally built `:dev` tags; the fresh-copy walkthrough is
-  still outstanding.
+- **R25 completed on 26 October 2026:** The README setup was rehearsed using
+  the separate `urumi-rehearsal` k3d cluster and port 18080. Helm revision 2
+  deployed successfully, the application pods became Ready, the dashboard
+  and storefront returned HTTP 200, and the user confirmed the dashboard,
+  WooCommerce, API-key, team, audit, chat and Antigravity MCP acceptance flows.
 
 R4 persistence evidence is recorded in the requirements table above.
 

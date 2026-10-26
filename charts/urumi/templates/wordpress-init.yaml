@@ -122,7 +122,11 @@ spec:
           args:
             - |
               if [ ! -f /var/www/html/wp-includes/version.php ]; then
-                cp -Rn /usr/src/wordpress/. /var/www/html/
+                if [ -z "$(find /var/www/html/wp-content -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+                  cp -Rn /usr/src/wordpress/. /var/www/html/
+                else
+                  find /usr/src/wordpress -mindepth 1 -maxdepth 1 ! -name wp-content -exec cp -Rn {} /var/www/html/ \;
+                fi
               fi
               test -s /var/www/html/wp-includes/version.php
           securityContext:
@@ -204,7 +208,7 @@ spec:
               fi
 
               if ! wp plugin is-installed woocommerce; then
-                wp plugin install woocommerce
+                wp plugin install https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip
               fi
 
               if ! wp plugin is-active woocommerce; then

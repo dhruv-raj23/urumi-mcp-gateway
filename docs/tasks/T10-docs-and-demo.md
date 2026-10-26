@@ -19,8 +19,9 @@
 
 ## Verification evidence completed
 
-- [x] `make check` passed: 185 automated tests plus repository, secret and
-      chart-policy checks. The lint target remains a TODO stub.
+- [x] `make check` passed all 220 automated tests in a clean checkout:
+      gateway 191, Woo MCP 9, Time 6, Notes 5, Dashboard 9. Scaffold and
+      secret scans and chart-policy checks passed. ESLint remains unconfigured.
 - [x] Helm lint and local rendering passed.
 - [x] Gateway startup and health check passed; dashboard and storefront
       returned HTTP 200.
@@ -47,8 +48,11 @@
 
 ## Remaining acceptance tasks
 
-- [ ] Rehearse the README workflow from a clean working copy. Do not delete
-      the active assignment cluster or persistent volumes.
+- [x] Rehearse the README workflow from a clean checkout using the isolated
+      `urumi-rehearsal` k3d cluster. Helm revision 2 deployed; application
+      pods became Ready; dashboard and storefront returned HTTP 200; the user
+      confirmed admin, WooCommerce, API-key, team, audit, chat and Antigravity
+      MCP acceptance flows. The original cluster and its PVCs were preserved.
 - [x] Verify the recorded two-user flow and audit attribution: User A (admin)
       uses chat for product creation; User B (member) uses external MCP with
       their own API key. Confirm `source=chat` and `source=mcp` are attributed
@@ -56,7 +60,8 @@
 - [x] Record the final demo video locally on 26 October 2026.
 - [x] Review the complete video for required flows, correct user and audit
       attribution, and visible credentials, passwords, tokens or customer data.
-- [ ] Confirm all workloads/upstreams are healthy after the rehearsal.
+- [x] Confirmed all application pods Ready after the rehearsal; WooCommerce
+      was connected and its five tools were discovered in the dashboard.
 - [ ] Submit the video and GitHub repository using
       https://forms.gle/nftwgyNeenSDmiRb6.
 
