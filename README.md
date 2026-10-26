@@ -325,14 +325,3 @@ Application-level SSRF URL, DNS-destination and redirect checks are
 implemented and tested. Production NetworkPolicy enforcement and IPv6
 behavior remain unverified. Comprehensive per-user rate limiting remains
 incomplete, and a real VPS deployment has not been completed.
-
-## 12. Submission checklist
-
-- [x] Record the demo video (completed locally on 26 October 2026).
-- [x] Review the complete video for required flows, correct user attribution,
-      visible credentials and customer-identifying information.
-- [ ] Rehearse the README from a clean working copy without resetting the
-      active assignment cluster or persistent volumes.
-- [x] Update `docs/01-requirements-traceability.md` using verified evidence.
-- [ ] Submit the video and GitHub repository using:
-      https://forms.gle/nftwgyNeenSDmiRb6
