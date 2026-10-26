@@ -326,10 +326,10 @@ incomplete, and a real VPS deployment has not been completed.
 ## 12. Submission checklist
 
 - [x] Record the demo video (completed locally on 26 October 2026).
-- [ ] Review the complete video for required flows, correct user attribution,
+- [x] Review the complete video for required flows, correct user attribution,
       visible credentials and customer-identifying information.
 - [ ] Rehearse the README from a clean working copy without resetting the
       active assignment cluster or persistent volumes.
-- [ ] Update `docs/01-requirements-traceability.md` using verified evidence.
+- [x] Update `docs/01-requirements-traceability.md` using verified evidence.
 - [ ] Submit the video and GitHub repository using:
       https://forms.gle/nftwgyNeenSDmiRb6

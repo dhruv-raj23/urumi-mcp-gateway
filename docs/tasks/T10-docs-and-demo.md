@@ -49,12 +49,12 @@
 
 - [ ] Rehearse the README workflow from a clean working copy. Do not delete
       the active assignment cluster or persistent volumes.
-- [ ] Verify the recorded two-user flow and audit attribution: User A (admin)
+- [x] Verify the recorded two-user flow and audit attribution: User A (admin)
       uses chat for product creation; User B (member) uses external MCP with
       their own API key. Confirm `source=chat` and `source=mcp` are attributed
       to the correct users.
 - [x] Record the final demo video locally on 26 October 2026.
-- [ ] Review the complete video for required flows, correct user and audit
+- [x] Review the complete video for required flows, correct user and audit
       attribution, and visible credentials, passwords, tokens or customer data.
 - [ ] Confirm all workloads/upstreams are healthy after the rehearsal.
 - [ ] Submit the video and GitHub repository using

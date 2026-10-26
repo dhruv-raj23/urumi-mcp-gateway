@@ -66,14 +66,15 @@ requirement-by-requirement evidence and remaining acceptance work.
 
 - [ ] Rehearse the complete README from a clean working copy without removing
       or resetting the active assignment cluster.
-- [ ] Review the recorded video and verify the two-user flow: User A (admin)
+- [x] Review the recorded video and verify the two-user flow: User A (admin)
       uses chat for product creation; User B (member) uses external MCP. Confirm
       `source=chat` and `source=mcp` are attributed to the correct users.
 - [x] Record the final demo video on 26 October 2026.
-- [ ] Review the full video for required flows, correct audit identities, and
+- [x] Review the full video for required flows, correct audit identities, and
       visible credentials or customer-identifying data.
 - [ ] Submit the video and repository through the assignment form.
-- [ ] Check off R24 and R25 only after video and fresh-copy evidence exist.
+- [x] R24 video recording and review completed.
+- [ ] R25 remains pending until the clean-copy README rehearsal succeeds.
 
 ## Known limitations and unverified production work
 
