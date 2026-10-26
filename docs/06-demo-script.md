@@ -138,10 +138,12 @@ Demonstrate role-based tool authorization: as a member, show that
 list and that a direct call is denied and audited. Then show that an admin
 retains write access.
 
-State the limitations honestly: comprehensive SSRF destination filtering,
-configurable per-user permission policies and comprehensive per-user rate
-limiting are not implemented. URL syntax validation is not a complete SSRF
-defense.
+State the limitations honestly: application-level URL, DNS-destination
+and redirect checks are implemented and tested, but NetworkPolicy egress is
+not a hostname allowlist, and IPv6 behavior and target-cluster enforcement
+require verification. Public upstreams are not inherently trustworthy.
+Configurable per-user permissions and comprehensive per-user rate limiting
+are not implemented.
 
 ## 10. Local-to-VPS and Helm rollback
 

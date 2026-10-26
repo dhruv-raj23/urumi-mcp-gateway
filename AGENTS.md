@@ -1,7 +1,7 @@
 # AGENTS.md — READ THIS FIRST (every session, every agent)
 
 Project: **Team MCP Gateway + WooCommerce on Kubernetes** (Urumi AI FDE internship, Round 1).
-Deadline: **26 Oct 2026**. The owner (AJ) must be able to explain every line in a live interview.
+Deadline: **26 Oct 2026**. The project owner must be able to explain every line in a live interview.
 So: simple, boring, well-commented-where-non-obvious code beats clever code.
 
 ## 1. Source of truth (highest wins on conflict)

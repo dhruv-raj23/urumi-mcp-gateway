@@ -13,7 +13,7 @@ requirement-by-requirement evidence and remaining acceptance work.
 - [x] T07 Chat agent, bounded tool loop and user-aware audit attribution
 - [x] T08 NetworkPolicy and workload hardening
 - [x] T09 Production values and local Helm upgrade/rollback rehearsal
-- [ ] T10 Fresh-copy README rehearsal, final two-user demo recording and submission
+- [ ] T10 Pre-submission review, clean-copy README rehearsal and submission (demo recorded 26 October 2026)
 
 ## Verification recorded on 24 October 2026
 
@@ -51,14 +51,27 @@ requirement-by-requirement evidence and remaining acceptance work.
 - [ ] Prometheus scraping is not configured; metrics reset on restart and
       are not aggregated across replicas.
 
+## Final repository validation — 26 October 2026
+
+- `make check` completed with 220 automated tests passing: gateway 191, Woo MCP 9,
+  Time 6, Notes 5, and Dashboard 9.
+- Scaffold verification and the repository secret scan passed.
+- Helm lint passed for local and production values; chart policy passed for 9 workloads
+  and 22 containers/init containers across two rendered configurations.
+- Lint scripts still emit `TODO(T00+): configure eslint`; ESLint is not configured,
+  so this is not an ESLint pass.
+- `git diff --check` passed after the initial documentation corrections.
+
 ## Remaining acceptance work
 
 - [ ] Rehearse the complete README from a clean working copy without removing
       or resetting the active assignment cluster.
-- [ ] Rehearse the two-user demo twice: User A must be a member using chat;
-      User B must be a distinct member using an external MCP client.
-- [ ] Record and review the final demo video, checking for visible credentials
-      and customer-identifying data.
+- [ ] Review the recorded video and verify the two-user flow: User A (admin)
+      uses chat for product creation; User B (member) uses external MCP. Confirm
+      `source=chat` and `source=mcp` are attributed to the correct users.
+- [x] Record the final demo video on 26 October 2026.
+- [ ] Review the full video for required flows, correct audit identities, and
+      visible credentials or customer-identifying data.
 - [ ] Submit the video and repository through the assignment form.
 - [ ] Check off R24 and R25 only after video and fresh-copy evidence exist.
 
@@ -67,12 +80,15 @@ requirement-by-requirement evidence and remaining acceptance work.
 A real VPS deployment, public pullability of the configured GHCR image tags,
 production DNS/TLS and production backup/restore remain unverified.
 Role-based tool authorization is implemented with a fixed allowlist and
-tested at the policy, aggregator and dashboard metadata layers. Comprehensive
-SSRF destination filtering and per-user rate limiting remain unimplemented.
+tested at the policy, aggregator and dashboard metadata layers.
+Application-level SSRF destination checks are implemented and tested;
+production egress enforcement and IPv6 behavior remain unverified.
+Comprehensive per-user rate limiting remains unimplemented.
 
 ## Stand-out items attempted
 
 NetworkPolicy hardening, a local Helm upgrade/rollback rehearsal,
-idempotent default WooCommerce server registration, and fixed role-based tool
-authorization are implemented and documented. Comprehensive SSRF filtering
-and per-user rate limiting remain future work.
+idempotent default WooCommerce server registration, fixed role-based tool
+authorization and application-level SSRF destination checks are implemented
+and documented. Production egress enforcement and IPv6 behavior remain
+unverified; comprehensive per-user rate limiting remains future work.

@@ -125,12 +125,15 @@ Open `http://app.localhost` and sign in with the bootstrap admin email and
 the password supplied to the Secrets script.
 
 The admin can manage upstream servers, invite users and inspect audit records.
-Create two distinct member users for the acceptance demonstration:
+Use two distinct accounts for the acceptance demonstration:
 
-- **User A:** uses the dashboard chat agent.
-- **User B:** connects through an external MCP client.
+- **User A (admin):** uses dashboard chat for product creation.
+- **User B (member):** connects through an external MCP client with their own API key.
 
-Each member should create their own API key. The full key is shown only once.
+This matches the fixed permission policy: members have a read-only tool
+allowlist, while admins have broader access to exposed tools.
+
+Each user should create their own API key. The full key is shown only once.
 Store it securely in the intended client configuration. Never put it in Git,
 screenshots or a recording. Revoking a key should make the next request using
 it unauthorized.
@@ -274,10 +277,13 @@ MongoDB, MariaDB and WordPress content before using real customer data.
   upstream with bounded timeouts.
 - NetworkPolicies restrict service paths. Woo MCP is not exposed by a public
   Ingress.
-- Comprehensive SSRF destination filtering is **not implemented**. The URL
-  validator checks HTTP(S) and rejects embedded user-info, but does not
-  comprehensively block loopback, private, cluster-internal, link-local or
-  metadata destinations.
+- Application-level upstream destination validation is implemented in
+  `apps/gateway/src/security/ssrf.ts`. External upstreams must use HTTPS
+  on the default port; DNS answers are validated at connection time,
+  built-in endpoints must match their expected service identity, and
+  redirects and changed request targets are rejected. These checks
+  reduce SSRF risks but do not make a public upstream trustworthy or
+  prove complete production egress enforcement, particularly for IPv6.
 - Role-based tool authorization uses a fixed allowlist in
   `apps/gateway/src/mcp/toolPermissions.ts`. Member tool lists and dashboard
   server metadata are filtered, and restricted direct calls are rejected
@@ -312,14 +318,18 @@ the public Ingress. Live verification passed on k3d at Helm revision 41;
 Prometheus scraping remains unconfigured. Metrics are process-local, reset on
 restart, and are not aggregated across gateway replicas.
 
-Comprehensive SSRF destination filtering and comprehensive per-user rate
-limiting remain incomplete. A real VPS deployment has not been completed.
+Application-level SSRF URL, DNS-destination and redirect checks are
+implemented and tested. Production NetworkPolicy enforcement and IPv6
+behavior remain unverified. Comprehensive per-user rate limiting remains
+incomplete, and a real VPS deployment has not been completed.
 
 ## 12. Submission checklist
 
-- [ ] Rehearse and record the two-user demo.
-- [ ] Check the video for visible credentials and customer information.
-- [ ] Complete the remaining evidence rows in
-      `docs/01-requirements-traceability.md`.
+- [x] Record the demo video (completed locally on 26 October 2026).
+- [ ] Review the complete video for required flows, correct user attribution,
+      visible credentials and customer-identifying information.
+- [ ] Rehearse the README from a clean working copy without resetting the
+      active assignment cluster or persistent volumes.
+- [ ] Update `docs/01-requirements-traceability.md` using verified evidence.
 - [ ] Submit the video and GitHub repository using:
       https://forms.gle/nftwgyNeenSDmiRb6

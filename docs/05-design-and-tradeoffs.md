@@ -107,12 +107,16 @@ service paths; upstream MCP Services are not published through a public
 Ingress. Local testing demonstrated that the gateway could reach its
 upstreams and an ordinary unauthorized pod could not reach Woo MCP.
 
-These controls do not constitute comprehensive SSRF protection. Arbitrary
-admin-added URLs are not protected by a complete destination filter, and
-TCP 443 egress remains broad for external provider access. Role-based
-tool authorization is implemented with an explicit admin/member allowlist.
-It is not a configurable per-user policy, and comprehensive per-user rate
-limits are not implemented.
+The gateway validates upstream destinations in
+`apps/gateway/src/security/ssrf.ts`: built-in endpoints must match their
+expected service identities, external endpoints must use HTTPS on the default
+port, DNS answers are validated before connection, and redirects are rejected.
+These checks reduce SSRF risk but cannot make a public upstream trustworthy.
+NetworkPolicy TCP/443 egress still permits broad external access with IPv4
+exclusions; it is not a hostname allowlist or proof of complete IPv6
+enforcement. Tool authorization uses a fixed admin/member allowlist rather
+than configurable per-user policies. Comprehensive per-user rate limiting
+is not implemented.
 
 The local Helm upgrade/rollback rehearsal demonstrated rollback of a visible
 replica-count change. It did not demonstrate a production VPS deployment.
@@ -139,7 +143,9 @@ durable historical telemetry.
 
 ## 10. Remaining limitations
 
-1. SSRF destination filtering and redirect/DNS protections need implementation.
+1. Application-level SSRF URL, DNS-destination and redirect protections
+   are implemented and tested. Target-cluster NetworkPolicy enforcement
+   and IPv6 egress behavior still require verification.
 2. Tool authorization is a fixed role-based allowlist, not a configurable
    per-user permission editor. Comprehensive per-user rate limiting remains
    future work.

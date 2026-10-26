@@ -6,7 +6,7 @@ Format: `- [ ] (Txx) question — proposed default — status`
 - [x] (T01) WordPress database name and application DB username — decision: database `wordpress`, user `wordpress`, password from `urumi-mariadb` key `MARIADB_PASSWORD` — resolved by ADR-0008.
 - [x] (T01) WooCommerce store currency — decision: `INR` — resolved by ADR-0008.
 - [x] (T01) WordPress internal Apache container port — decision: Apache listens on unprivileged port `8080`, named `http`; Service port remains `80` with `targetPort: http`, and Ingress routes to Service port `80`. Probes target the container port using `/wp-login.php` or TCP as appropriate — resolved by ADR-0008.
-- [ ] (T08) WordPress NetworkPolicy port — WordPress Pods receive traffic on container port `8080` (`http`), not Service port `80` — proposed default: allow required Pod ingress on TCP/8080 while public Ingress routes through Service port 80 — reminder for T08; do not use the Service port as the Pod port.
+- [x] (T08) WordPress NetworkPolicy port — resolved: NetworkPolicy rules target WordPress Pod port `8080`; the Service exposes port `80` and forwards to the named HTTP target port. Evidence: `charts/urumi/templates/networkpolicy.yaml` and `charts/urumi/templates/wordpress.yaml`.
 
 ## T03 authentication decisions — 18 Oct 2026
 
@@ -62,7 +62,7 @@ Format: `- [ ] (Txx) question — proposed default — status`
 
 - [x] **Resolved 21 Oct 2026 via ADR-0014:** strict `{ "status": "disabled" }` request; HTTP 200 public-user response; admin-only; only member accounts can be disabled; active and invited members may transition to disabled; invited tokens are cleared; repeat requests for already-disabled members are idempotent; no reactivation through this endpoint.
 - **Implementation:** tracked in `docs/tasks/T06A-member-disable-endpoint.md`.
-- **T06 impact:** member disablement remains incomplete until the backend route and tests pass and the dashboard workflow is verified in the browser.
+- **T06 status:** member-disablement implementation and acceptance evidence are tracked in `docs/tasks/T06A-member-disable-endpoint.md`; use that task record rather than this resolved-question log to assess completion.
 
 ## T07 scope — chat route and dashboard integration
 

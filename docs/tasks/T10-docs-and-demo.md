@@ -49,12 +49,13 @@
 
 - [ ] Rehearse the README workflow from a clean working copy. Do not delete
       the active assignment cluster or persistent volumes.
-- [ ] Rehearse the complete two-user flow twice:
-      User A uses chat; User B is a distinct user using external MCP.
-- [ ] Confirm User A's audit entries have `source=chat` and User B's have
-      `source=mcp`.
-- [ ] Record the final demo video and review it for visible credentials,
-      passwords, tokens and customer-identifying data.
+- [ ] Verify the recorded two-user flow and audit attribution: User A (admin)
+      uses chat for product creation; User B (member) uses external MCP with
+      their own API key. Confirm `source=chat` and `source=mcp` are attributed
+      to the correct users.
+- [x] Record the final demo video locally on 26 October 2026.
+- [ ] Review the complete video for required flows, correct user and audit
+      attribution, and visible credentials, passwords, tokens or customer data.
 - [ ] Confirm all workloads/upstreams are healthy after the rehearsal.
 - [ ] Submit the video and GitHub repository using
       https://forms.gle/nftwgyNeenSDmiRb6.
@@ -64,6 +65,8 @@
 - A real VPS deployment, production DNS/TLS, and public pullability of the
   configured GHCR image tags have not been demonstrated.
 - Fixed role-based tool authorization is implemented and tested; the policy
-  is not configurable per user. Comprehensive SSRF destination filtering and
-  comprehensive per-user rate limiting remain unimplemented.
+  is not configurable per user. Application-level SSRF URL, DNS-destination
+  and redirect checks are implemented and tested. Production egress enforcement
+  and IPv6 behavior remain unverified; comprehensive per-user rate limiting
+  remains unimplemented.
 - ESLint is not configured; the repository lint scripts are TODO stubs.

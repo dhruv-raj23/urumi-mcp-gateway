@@ -27,9 +27,9 @@ unchecked item still needs the evidence described below.
 | R19 | Per-user API keys hashed and revocable | T03 | Key/security tests; revoked key returned HTTP 401; replacement key succeeded | [x] |
 | R20 | Audit log of calls visible in dashboard | T03,T04,T06 | Dashboard audit test; observed attributed `mcp` and `chat` records | [x] |
 | R21 | Chat agent tool loop and visible tool calls | T07 | Gateway chat tests, dashboard tests and local chat acceptance | [x] |
-| R22 | Chat acts as signed-in user and records attribution | T07 | Audit record identified the chat actor and `source=chat`; include member User A evidence in final video | [x] |
+| R22 | Chat acts as signed-in user and records attribution | T07 | Local audit evidence identified the chat actor and `source=chat`; final video review should confirm attribution to the signed-in User A (admin) | [x] |
 | R23 | LLM key stored in Kubernetes Secret | T00,T07 | `urumi-gateway` Secret wiring and chart/secret scans | [x] |
-| R24 | Two-user end-to-end demo video | T10 | Record and review `docs/06-demo-script.md`; not yet submitted | [ ] |
+| R24 | Two-user end-to-end demo video | T10 | Video recorded locally on 26 October 2026; final review of user identities, audit attribution, required flows and secret redaction remains | [ ] |
 | R25 | README covers local, VPS, order, external client and chat | T10 | README written; rehearse the complete setup from a clean working copy before checking complete | [ ] |
 | R26 | System design and trade-offs note | T10 | `docs/05-design-and-tradeoffs.md` | [x] |
 | R27 | Threat model covers the four required topics | T10 | `docs/04-threat-model.md` | [x] |
@@ -47,18 +47,21 @@ unchecked item still needs the evidence described below.
 
 ## Remaining acceptance evidence
 
-- **R4:** Capture `kubectl get pvc -n urumi` and verify persistence after safe
-  pod recreation. Never delete PVCs to conduct this check.
-- **R24:** Record the two-user demo. Check that User A's chat calls and User B's
-  external MCP calls have distinct identities and correct audit sources.
+- **R24:** Review the recorded video to verify the required flows, distinct user
+  identities, `source=chat`/`source=mcp` audit attribution, and absence of visible
+  credentials or customer-identifying data. Keep this unchecked until reviewed.
 - **R25:** Follow the README from a clean working copy. The local deploy target
   was aligned with locally built `:dev` tags; the fresh-copy walkthrough is
   still outstanding.
+
+R4 persistence evidence is recorded in the requirements table above.
 
 Local k3d acceptance does not establish a live production deployment. GHCR
 image pullability, production DNS/TLS and a real VPS rollout remain unverified.
 Role-based tool authorization is implemented using a fixed admin/member
 allowlist. Evidence: `apps/gateway/src/mcp/toolPermissions.ts`,
 `apps/gateway/tests/toolPermissions.test.ts`, aggregator tests and HTTP
-metadata-filtering tests. Comprehensive SSRF filtering and per-user rate
-limiting remain unimplemented.
+metadata-filtering tests. Application-level SSRF URL, DNS-destination and
+redirect checks are implemented and tested; production NetworkPolicy
+enforcement and IPv6 behavior remain unverified. Comprehensive per-user
+rate limiting remains unimplemented.

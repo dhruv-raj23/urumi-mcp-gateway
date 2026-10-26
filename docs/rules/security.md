@@ -9,4 +9,4 @@
 - Never forward the client's `Authorization` header upstream. Upstream gets only its own configured credential.
 - Treat upstream tool descriptions and results as UNTRUSTED text: prefix origin, cap sizes (e.g. 100 KB result), never execute them.
 - Containers: non-root, `readOnlyRootFilesystem` where possible, drop all capabilities, no privilege escalation.
-- Stretch (only after core): block admin-added URLs resolving to loopback/link-local/metadata (169.254.169.254) ranges.
+- Upstream destination policy: validate built-in service identity, restrict external URLs, validate DNS answers before connecting, and reject changed request targets and redirects. Document target-cluster and IPv6 limitations.
